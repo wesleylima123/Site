@@ -198,19 +198,49 @@ function getNatureCardClass(nature) {
     return '';
 }
 
+
 function applyNatureTheme(nature) {
     const layout = document.getElementById('pdf-content');
-    layout.className = 'builder-layout';
+    layout.className = 'builder-layout'; 
     if(!nature) return;
-    if(nature.includes('Nexo Padrão')) layout.classList.add('theme-nexo');
-    else if(nature.includes('Arquiteto')) layout.classList.add('theme-arquiteto');
-    else if(nature.includes('Operador')) layout.classList.add('theme-operador');
-    else if(nature.includes('Classer')) layout.classList.add('theme-classer');
-    else if(nature.includes('Carreira')) layout.classList.add('theme-carreira');
-    else if(nature.includes('Designado')) layout.classList.add('theme-designado');
-    else if(nature.includes('Envolto')) layout.classList.add('theme-envolto');
-    else if(nature.includes('Ordem')) layout.classList.add('theme-ordem');
+    if(nature.includes("Nexo Padrão")) layout.classList.add('theme-exodo-padrao');
+    else if(nature.includes("Arquiteto")) layout.classList.add('theme-arquiteto');
+    else if(nature.includes("Operador")) layout.classList.add('theme-operador');
+    else if(nature.includes("Classer") || nature.includes("Herdada")) layout.classList.add('theme-exodo-classer');
+    else if(nature.includes("Carreira")) layout.classList.add('theme-ocultatun-carreira');
+    else if(nature.includes("Designado")) layout.classList.add('theme-ocultatun-designado');
+    else if(nature.includes("Envolto")) layout.classList.add('theme-ocultatun-envolto');
+    else if(nature.includes("Ordem")) layout.classList.add('theme-ocultatun-ordem');
 }
+
+// Sobrescrever toggleEditUI para não travar os cards se estiver em edição
+function toggleEditUI() {
+    const form = document.getElementById('char-form');
+    form.classList.toggle('view-mode', !isEditMode);
+    document.getElementById('btn-toggle-edit').innerText = isEditMode ? "SALVAR EDIÇÃO" : "INICIAR EDIÇÃO";
+    
+    document.querySelectorAll('#char-form input[type="text"], #char-form input[type="number"], #char-form textarea').forEach(el => {
+        if(!isEditMode) el.setAttribute('readonly', true);
+        else el.removeAttribute('readonly');
+    });
+
+    document.querySelectorAll('.choice-card').forEach(el => {
+        // Permite clicar nos cards se estiver em modo de edição
+        el.style.pointerEvents = isEditMode ? 'auto' : 'none';
+        if(isEditMode) el.classList.remove('locked');
+    });
+
+    document.querySelectorAll('.hide-on-view').forEach(el => el.style.display = isEditMode ? '' : 'none');
+    
+    if(!isEditMode) {
+        document.getElementById('upload-avatar-group').style.display = 'none';
+        document.getElementById('upload-gallery-group').style.display = 'none';
+    } else {
+        document.getElementById('upload-avatar-group').style.display = '';
+        document.getElementById('upload-gallery-group').style.display = '';
+    }
+}
+
 
 async function downloadPDF() {
     const wasEdit = isEditMode;
@@ -270,10 +300,11 @@ function importCharacterJSON(event) {
     reader.readAsText(file);
 }
 
+
 function initBuilderForSelectedMode() {
     const LIMIT = currentUser.role === 'jogador' ? 5 : 10;
     if(characters.length >= LIMIT) {
-        alert(`O limite de ${LIMIT} almas forjadas foi atingido para sua classe de conta.`);
+        alert(`O limite de ${LIMIT} almas forjadas foi atingido.`);
         return;
     }
 
@@ -283,13 +314,30 @@ function initBuilderForSelectedMode() {
     currentPowerDraft = [];
     isEditMode = true;
 
+    // LIMPEZA TOTAL DA FICHA PARA NÃO APARECEREM DADOS ANTIGOS
+    document.getElementById('char-form').reset();
     document.getElementById('char-name').value = '';
+    document.querySelectorAll('.attr-input').forEach(el => el.value = '0');
+    document.getElementById('pts-count').value = '0';
+    document.querySelectorAll('.res-val-input').forEach(el => el.value = '');
+    
+    document.getElementById('avatar-preview-container').innerHTML = '<span style="color:#666; font-size:0.8rem;">Nenhum retrato</span>';
+    document.getElementById('gallery-container').innerHTML = '';
+    document.getElementById('skills-list').innerHTML = '';
+    document.getElementById('powers-list').innerHTML = '';
+    document.getElementById('specific-content-container').innerHTML = '';
+    
+    currentUnlockedNodes = [];
+    if(document.getElementById('tree-unlocked-data')) {
+        document.getElementById('tree-unlocked-data').value = '';
+    }
 
     populateSelects(selectedGameMode);
     startBuilder(selectedGameMode);
 
     toggleEditUI();
 }
+
 
 function populateSelects(mode) {
     const skSelect = document.getElementById('select-skill-name');
@@ -333,29 +381,30 @@ function startBuilder(mode) {
     openTab('tab-identity');
 }
 
+
 function selectNature(natureName) {
     if(!isEditMode && !document.getElementById('screen-builder').classList.contains('overlay')) return;
-
+    
     currentNature = natureName;
     document.getElementById('char-nature').value = natureName;
-
+    
     document.querySelectorAll('#nature-grid .choice-card').forEach(c => {
         c.classList.toggle('active', c.querySelector('h4').innerText === natureName);
     });
 
     const natureData = ruleset[currentMode].natures[natureName];
-
+    
     const descBox = document.getElementById('nature-description');
     descBox.innerText = natureData.desc;
     descBox.style.display = 'block';
 
     applyNatureTheme(currentNature);
-
+    
     const classGrid = document.getElementById('class-grid');
     classGrid.innerHTML = '';
     document.getElementById('char-class').value = '';
     document.getElementById('subclass-description').style.display = 'none';
-
+    
     Object.keys(natureData.classes).forEach(c => {
         const card = document.createElement('div');
         card.className = 'choice-card';
@@ -363,224 +412,127 @@ function selectNature(natureName) {
         card.onclick = () => selectClass(c);
         classGrid.appendChild(card);
     });
-
+    
     document.getElementById('class-container').style.display = 'block';
     setupResources(natureData.resources);
-
+    
     const tabsContainer = document.getElementById('dynamic-tabs');
     const existing = document.getElementById('btn-tab-specific');
     if(existing) existing.remove();
-
+    
     if(natureData.tabName) {
         tabsContainer.innerHTML += `<button id="btn-tab-specific" class="tab-btn special-tab" onclick="openTab('tab-specific')">${natureData.tabName}</button>`;
-        document.getElementById('specific-content-container').innerHTML = natureData.tabHtml;
-    }
-
-    updatePowerSelects(currentNature);
-}
-
-function selectClass(className, skipAutofill = false) {
-    if(!isEditMode && !document.getElementById('screen-builder').classList.contains('overlay')) return;
-
-    currentClass = className;
-    document.getElementById('char-class').value = className;
-
-    document.querySelectorAll('#class-grid .choice-card').forEach(c => {
-        c.classList.toggle('active', c.querySelector('h4').innerText === className);
-    });
-
-    const classData = ruleset[currentMode].natures[currentNature].classes[className];
-    const classDescBox = document.getElementById('subclass-description');
-    if(classDescDict[className]) {
-        classDescBox.innerText = classDescDict[className];
-        classDescBox.style.display = 'block';
-    } else {
-        classDescBox.style.display = 'none';
-    }
-
-    if (!skipAutofill) {
-        document.getElementById('attr-for').value = classData.attr.for || 0;
-        document.getElementById('attr-vig').value = classData.attr.vig || 0;
-        document.getElementById('attr-agi').value = classData.attr.agi || 0;
-        document.getElementById('attr-int').value = classData.attr.int || 0;
-        document.getElementById('attr-prn').value = classData.attr.prn || 0;
-        document.getElementById('attr-pre').value = classData.attr.pre || 0;
-    }
-
-    if(isEditMode) {
-        document.querySelectorAll('.attr-input').forEach(i => i.removeAttribute('readonly'));
-    }
-
-    if(classData.pts) {
-        document.getElementById('points-tracker').style.display = 'block';
-        if (!skipAutofill) document.getElementById('pts-count').value = classData.pts;
-    } else {
-        document.getElementById('points-tracker').style.display = 'block';
-        if (!skipAutofill) document.getElementById('pts-count').value = 0;
-    }
-
-    if (!skipAutofill) {
-        const skillsList = document.getElementById('skills-list');
-        skillsList.innerHTML = '';
-        if(classData.skills && classData.skills.length > 0) {
-            classData.skills.forEach(sk => {
-                skillsList.innerHTML += `
-                    <div class="list-item locked">
-                        <div class="list-item-header">
-                            <input type="text" value="${sk} (Nativo da Casca)" readonly>
-                        </div>
-                    </div>`;
-            });
+        
+        // Verifica se usa a árvore nova ou o HTML padrão
+        if(natureName === 'O Envolto (Horror Cósmico)' || natureName === 'Classer (Linhagem Herdada)') {
+             buildSkillTreeUI(natureName);
+        } else {
+             document.getElementById('specific-content-container').innerHTML = natureData.tabHtml;
         }
     }
+    
+    updatePowerSelects(currentNature);
     recalculateStats();
 }
 
-function updateSkillDesc() {
-    const type = document.getElementById('select-skill-type').value;
-    const name = document.getElementById('select-skill-name').value;
-    const box = document.getElementById('skill-desc-box');
 
-    let dict = null;
-    if(type === 'Perícia') dict = descDict.skills;
-    else if(type === 'Vantagem') dict = descDict.advantages;
-    else if(type === 'Talento') dict = descDict.talents;
 
-    if(dict && dict[name]) box.innerText = dict[name];
-    else box.innerText = 'Descrição indisponível nos registros primários.';
+let cropperInstance = null;
+let cropTarget = null; 
+
+function openCropModal(imageSrc, target) {
+    cropTarget = target;
+    document.getElementById('crop-image').src = imageSrc;
+    document.getElementById('crop-modal').style.display = 'flex';
+    
+    if(cropperInstance) cropperInstance.destroy();
+    
+    cropperInstance = new Cropper(document.getElementById('crop-image'), {
+        aspectRatio: target === 'avatar' ? 1 : NaN,
+        viewMode: 1,
+        autoCropArea: 1
+    });
 }
 
-function updatePowerSelects(nature) {
-    const pwSelect = document.getElementById('pb-potency-name');
-    if(!pwSelect) return;
-    pwSelect.innerHTML = '';
-    let powersToUse = [];
-
-    if(currentMode === 'exodo') {
-        powersToUse = lists.exodo.powers;
-    } else {
-        if(lists.ocultatun.powers[nature]) {
-            powersToUse = lists.ocultatun.powers[nature];
-        } else {
-            powersToUse = ['Habilidades Manuais'];
-        }
+function confirmCrop() {
+    if(!cropperInstance) return;
+    const canvas = cropperInstance.getCroppedCanvas({ width: 800, height: 800 });
+    const base64 = canvas.toDataURL('image/jpeg', 0.8);
+    
+    if(cropTarget === 'avatar') {
+        currentAvatarBase64 = base64;
+        document.getElementById('avatar-preview-container').innerHTML = `<img src="${base64}">`;
+    } else if(cropTarget === 'gallery') {
+        currentGallery.push(base64);
+        renderGallery();
     }
-    powersToUse.forEach(p => pwSelect.innerHTML += `<option value="${p}">${p}</option>`);
-    updatePowerDesc();
+    cancelCrop();
 }
 
-function updatePowerDesc() {
-    const name = document.getElementById('pb-potency-name').value;
-    const box = document.getElementById('power-desc-box');
-    if(descDict.powers[name]) box.innerText = descDict.powers[name];
-    else box.innerText = '';
+function cancelCrop() {
+    document.getElementById('crop-modal').style.display = 'none';
+    if(cropperInstance) cropperInstance.destroy();
+    cropperInstance = null;
 }
 
-function setupResources(resList) {
-    const panel = document.getElementById('resource-panel');
-    panel.innerHTML = '';
-    resList.forEach(res => {
-        panel.innerHTML += `
-            <div class="res-box">
-                <h4>${res}</h4>
-                <input type="text" class="res-val-input" data-type="${res}" id="res-val-${res.replace(/[^a-zA-Z]/g, '')}">
-            </div>`;
+function renderGallery() {
+    const container = document.getElementById('gallery-container');
+    container.innerHTML = '';
+    currentGallery.forEach((img, idx) => {
+        container.innerHTML += `
+            <div class="gallery-thumb">
+                <img src="${img}" onclick="viewFullscreen('${img}')">
+                ${isEditMode ? `<button type="button" class="delete-btn" onclick="removeGalleryImage(${idx}, event)">X</button>` : ''}
+            </div>
+        `;
     });
 }
 
-function recalculateStats() {
-    if(!currentNature) return;
-
-    const vig = parseInt(document.getElementById('attr-vig').value) || 0;
-    const int = parseInt(document.getElementById('attr-int').value) || 0;
-    const pre = parseInt(document.getElementById('attr-pre').value) || 0;
-    const prn = parseInt(document.getElementById('attr-prn').value) || 0;
-
-    const panel = document.getElementById('resource-panel');
-
-    panel.querySelectorAll('.res-val-input').forEach(inp => {
-        const type = inp.getAttribute('data-type');
-        let val = 0;
-
-        if(type === 'PV') {
-            if(currentNature.includes('Carrasco')) val = (vig * 10) + 15;
-            else if(currentNature.includes('Ordem')) val = (vig * 10) + 10;
-            else if(currentNature.includes('Esotérico')) val = (vig * 10) + 12;
-            else val = (vig * 10) + 10;
-        }
-        else if(type.includes('EP') || type.includes('Energia') || type.includes('EE')) {
-            val = (Math.max(int, pre) * 5) + 15;
-        }
-        else if(type.includes('EB') || type.includes('Estamina')) {
-            val = (vig * 3) + 5;
-        }
-        else if(type.includes('DS')) {
-            let baseDS = (int + prn) * 3;
-            val = baseDS;
-        }
-        else if(type.includes('CO') || type.includes('Decadência') || type.includes('Assimilação')) val = 0;
-        else if(type.includes('LHL')) val = 75;
-        else val = '-';
-
-        inp.placeholder = 'Base: ' + val;
-        if(!inp.value && isEditMode) {
-            if (val !== 0 && val !== '-') {
-                inp.value = val;
-            }
-        }
-    });
-}
-
-function openTab(tabId) {
-    document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
-    document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
-    document.getElementById(tabId).classList.add('active');
-}
-
-function toggleEditMode() {
-    isEditMode = !isEditMode;
-    toggleEditUI();
-}
-
-function toggleEditUI() {
-    const form = document.getElementById('char-form');
-    form.classList.toggle('view-mode', !isEditMode);
-    document.getElementById('btn-toggle-edit').innerText = isEditMode ? 'SALVAR EDIÇÃO' : 'INICIAR EDIÇÃO';
-
-    document.querySelectorAll('#char-form input[type="text"], #char-form input[type="number"], #char-form textarea').forEach(el => {
-        if(!isEditMode) el.setAttribute('readonly', true);
-        else el.removeAttribute('readonly');
-    });
-
-    document.querySelectorAll('.choice-card').forEach(el => {
-        el.style.pointerEvents = isEditMode ? 'auto' : 'none';
-    });
-
-    document.querySelectorAll('.hide-on-view').forEach(el => el.style.display = isEditMode ? '' : 'none');
-
-    if(!isEditMode) {
-        document.getElementById('upload-avatar-group').style.display = 'none';
-        document.getElementById('upload-gallery-group').style.display = 'none';
-    } else {
-        document.getElementById('upload-avatar-group').style.display = '';
-        document.getElementById('upload-gallery-group').style.display = '';
-    }
-}
-
-function closeBuilder() {
-    const builder = document.getElementById('screen-builder');
-    if(builder.classList.contains('overlay')) {
-        builder.classList.remove('active', 'overlay');
-    } else {
-        showScreen('screen-char-select');
-    }
+function removeGalleryImage(idx, e) {
+    e.stopPropagation();
+    currentGallery.splice(idx, 1);
+    renderGallery();
 }
 
 function previewAvatar(e) {
+    const file = e.target.files[0];
+    if(!file) return;
     const reader = new FileReader();
-    reader.onload = (evt) => { currentAvatarBase64 = evt.target.result; document.getElementById('avatar-preview-container').innerHTML = `<img src="${currentAvatarBase64}">`; };
-    reader.readAsDataURL(e.target.files[0]);
+    reader.onload = (evt) => openCropModal(evt.target.result, 'avatar');
+    reader.readAsDataURL(file);
+    e.target.value = '';
 }
+
+function addGalleryImages(e) {
+    const file = e.target.files[0];
+    if(!file) return;
+    const reader = new FileReader();
+    reader.onload = (evt) => openCropModal(evt.target.result, 'gallery');
+    reader.readAsDataURL(file);
+    e.target.value = '';
+}
+
+let fsZoom = 1;
+function viewFullscreen(src) {
+    const modal = document.getElementById('fs-modal');
+    const img = document.getElementById('fs-img');
+    img.src = src;
+    fsZoom = 1;
+    img.style.transform = `scale(${fsZoom})`;
+    modal.style.display = 'flex';
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    const fsModal = document.getElementById('fs-modal');
+    if(fsModal) {
+        fsModal.addEventListener('wheel', (e) => {
+            e.preventDefault();
+            fsZoom += e.deltaY * -0.002;
+            fsZoom = Math.min(Math.max(0.5, fsZoom), 5);
+            document.getElementById('fs-img').style.transform = `scale(${fsZoom})`;
+        });
+    }
+});
 
 function addSkillFromSelect() {
     const type = document.getElementById('select-skill-type').value;
@@ -724,8 +676,16 @@ function loadCharacterToBuilder(index, sourceArray = characters, restrictToIdent
         currentAvatarBase64 = char.avatar;
         document.getElementById('avatar-preview-container').innerHTML = `<img src="${char.avatar}">`;
     } else {
+        currentAvatarBase64 = '';
         document.getElementById('avatar-preview-container').innerHTML = `<span style="color:#666; font-size:0.8rem;">Nenhum retrato</span>`;
     }
+
+    if(char.gallery) {
+        currentGallery = [...char.gallery];
+    } else {
+        currentGallery = [];
+    }
+    renderGallery();
 
     if(char.stats) {
         document.getElementById('attr-for').value = char.stats.for;
@@ -803,6 +763,7 @@ function loadCharacterToBuilder(index, sourceArray = characters, restrictToIdent
     openTab('tab-identity');
 }
 
+
 function renderCharList() {
     const container = document.getElementById('character-list');
     container.innerHTML = '';
@@ -827,9 +788,25 @@ function renderCharList() {
 
     characters.forEach((char, index) => {
         const animClass = getNatureCardClass(char.nature);
+        
+        // Define icone em 3D sutil baseado na classe/natureza
+        let iconColorClass = "icon-exodo";
+        if(char.mode === 'ocultatun') iconColorClass = "icon-ocultatun";
+        if(char.nature && char.nature.includes('Envolto')) iconColorClass = "icon-envolto";
+        if(char.nature && char.nature.includes('Classer')) iconColorClass = "icon-classer";
+        if(char.nature && char.nature.includes('Ordem')) iconColorClass = "icon-ordem";
+
         const wrapper = document.createElement('div');
         wrapper.className = 'card-wrapper';
         wrapper.innerHTML = `
+            <div class="card-3d-icon-wrapper ${iconColorClass}">
+                <div class="cube-icon">
+                    <div class="cube-face front"></div><div class="cube-face back"></div>
+                    <div class="cube-face left"></div><div class="cube-face right"></div>
+                    <div class="cube-face top"></div><div class="cube-face bottom"></div>
+                </div>
+            </div>
+            <button class="delete-soul" onclick="deleteCharacter(${index}, event)" title="Excluir Ficha">X</button>
             <div class="soul-card ${animClass}">
                 <div class="ornament"></div>
                 ${char.avatar ? `<img src="${char.avatar}" class="card-bg-img">` : ''}
@@ -845,6 +822,17 @@ function renderCharList() {
     if(activeCarouselIndex >= characters.length) activeCarouselIndex = characters.length - 1;
     updateCarousel();
 }
+
+function deleteCharacter(index, e) {
+    e.stopPropagation();
+    if(confirm("Deseja expurgar esta alma para sempre do Vazio? A ficha será deletada e as informações apagadas.")) {
+        characters.splice(index, 1);
+        saveGlobalCharacters();
+        renderCharList();
+        document.getElementById('sanctuary-limits').innerText = `Almas Vivas: ${characters.length} / ${currentUser.role === 'jogador' ? 5 : 10}`;
+    }
+}
+
 
 function handleCardClick(index, wrapperEl) {
     if (index === activeCarouselIndex) {
@@ -910,4 +898,205 @@ function updateCarousel() {
         wrapper.style.zIndex = zIndex;
         wrapper.style.opacity = opacity;
     });
+}
+
+
+document.addEventListener('DOMContentLoaded', () => {
+    const attrs = ['for', 'vig', 'agi', 'int', 'prn', 'pre'];
+    attrs.forEach(a => {
+        const el = document.getElementById('attr-' + a);
+        if(el) {
+            el.addEventListener('input', recalculateStats);
+        }
+    });
+});
+
+
+
+const treeData = {
+    'O Envolto (Horror Cósmico)': [
+        { id: 'e1', name: 'A Quimera', x: 50, y: 10, parent: null, desc: 'Abre sua percepção para a anti-existência. Visão no escuro anômala.' },
+        { id: 'e2', name: 'O Véu/Fenda', x: 30, y: 25, parent: 'e1', desc: 'Permite interagir com objetos etéreos e atravessar frestas.' },
+        { id: 'e3', name: 'O Paradoxo', x: 70, y: 25, parent: 'e1', desc: 'Confunde o tempo local. +2 em Iniciativa e Reflexos.' },
+        { id: 'e4', name: 'O Colapso', x: 15, y: 45, parent: 'e2', desc: 'Ataques causam necrose instantânea (+1d6 Dano Entrópico).' },
+        { id: 'e5', name: 'A Ressonância', x: 40, y: 45, parent: 'e2', desc: 'Vozes ancestrais aterrorizam inimigos próximos.' },
+        { id: 'e6', name: 'A Anomalia', x: 60, y: 45, parent: 'e3', desc: 'Seu corpo ignora o primeiro ataque físico recebido por cena.' },
+        { id: 'e7', name: 'A Inércia', x: 85, y: 45, parent: 'e3', desc: 'Reduz o deslocamento de inimigos em 3m num raio de 9m.' },
+        { id: 'e8', name: 'O Sangue Negro', x: 10, y: 65, parent: 'e4', desc: 'Sangue corrosivo. Atacantes sofrem 1d4 de dano corpo-a-corpo.' },
+        { id: 'e9', name: 'Oblívio', x: 35, y: 65, parent: 'e5', desc: 'Apaga temporariamente memórias de um alvo.' },
+        { id: 'e10', name: 'A Emanação', x: 65, y: 65, parent: 'e6', desc: 'Pode projetar sua consciência intangível até 18m.' },
+        { id: 'e11', name: 'A Entropia', x: 90, y: 65, parent: 'e7', desc: 'Estruturas e materiais mundanos apodrecem ao seu toque.' },
+        { id: 'e12', name: 'A Gravidade', x: 50, y: 80, parent: 'e5', desc: 'Controle de massa. Pode flutuar e andar nas paredes.' },
+        { id: 'e13', name: 'O Vértice', x: 50, y: 95, parent: 'e12', desc: 'Ponto focal da anti-existência. Pode conjurar um buraco negro anômalo.' }
+    ],
+    'Classer (Linhagem Herdada)': [
+        { id: 'c1', name: 'Adaptação Extrema', x: 50, y: 10, parent: null, desc: 'Seu DNA é reescrito. Imune a doenças e venenos comuns.' },
+        { id: 'c2', name: 'Aeternus Vitalis', x: 25, y: 25, parent: 'c1', desc: 'Regeneração celular brutal. Recupera 2 PV por rodada ativo.' },
+        { id: 'c3', name: 'Velocitus Bellator', x: 75, y: 25, parent: 'c1', desc: 'Reflexos predatórios. Ganha +3 metros de Deslocamento Base.' },
+        { id: 'c4', name: 'Resiliência Instintiva', x: 15, y: 45, parent: 'c2', desc: 'Seus ossos densificam. +2 Defesa Passiva Natural.' },
+        { id: 'c5', name: 'Sangue Fervente', x: 40, y: 45, parent: 'c2', desc: 'Cura PV com base em dano sofrido no mesmo turno.' },
+        { id: 'c6', name: 'Mentis Aurorae', x: 60, y: 45, parent: 'c3', desc: 'Expansão neural. Percebe o mundo em câmera lenta (+5 Prontidão).' },
+        { id: 'c7', name: 'Predador Perfeito', x: 85, y: 45, parent: 'c3', desc: 'Ataques corpo-a-corpo recebem Margem de Crítico +1.' },
+        { id: 'c8', name: 'Reconstrução', x: 25, y: 65, parent: 'c4', desc: 'Pode recolocar membros decepados em campo.' },
+        { id: 'c9', name: 'Força Titânica', x: 50, y: 65, parent: 'c5', desc: 'Sua capacidade de carga e dano de impacto dobram.' },
+        { id: 'c10', name: 'Visão Preditiva', x: 75, y: 65, parent: 'c6', desc: 'Anula penalidades de ataque surpresa ou flanqueamento.' },
+        { id: 'c11', name: 'Ápice Genético', x: 50, y: 85, parent: 'c9', desc: 'Ultrapassa o teto biológico para testes heroicos.' }
+    ]
+};
+let currentUnlockedNodes = [];
+
+function buildSkillTreeUI(nature) {
+    const container = document.getElementById('specific-content-container');
+    
+    // Verifica se a natureza tem uma árvore
+    if(!treeData[nature]) {
+        // Renderização padrão se não for árvore
+        const natureData = ruleset[currentMode].natures[nature];
+        if(natureData && natureData.tabHtml) {
+            container.innerHTML = natureData.tabHtml;
+        }
+        return;
+    }
+    
+    // Constrói a UI da árvore
+    let html = `
+        <h3 style="color:var(--theme-color); font-family: 'Cinzel', serif; margin-bottom: 10px; text-align:center;">Ramificações Biológicas e Espirituais</h3>
+        <p style="color:#aaa; font-size:0.85rem; text-align:center; margin-bottom:15px;">A evolução cobra seu preço. Desbloqueie os nodos adjacentes.</p>
+        <div class="tree-ui-container">
+            <svg class="tree-svg" id="tree-svg"></svg>
+            <div class="tree-nodes" id="tree-nodes"></div>
+        </div>
+        <div id="tree-node-info" class="desc-box" style="margin-top:15px; min-height:60px; text-align:center;">Selecione um ponto na árvore para ver a descrição.</div>
+        <input type="hidden" id="tree-unlocked-data" value="">
+    `;
+    container.innerHTML = html;
+    
+    setTimeout(() => renderTree(nature), 50);
+}
+
+function renderTree(nature) {
+    const nodesContainer = document.getElementById('tree-nodes');
+    const svgContainer = document.getElementById('tree-svg');
+    if(!nodesContainer || !svgContainer) return;
+    
+    nodesContainer.innerHTML = '';
+    svgContainer.innerHTML = '';
+    
+    const nodes = treeData[nature];
+    
+    // Recupera dados salvos
+    const savedDataEl = document.getElementById('spec-tree-unlocks');
+    if(savedDataEl && savedDataEl.value) {
+        try { currentUnlockedNodes = JSON.parse(savedDataEl.value); } catch(e){}
+    } else {
+        // Lê do objeto personagem atual se existir
+        if(editingIndex !== null && characters[editingIndex].specificData && characters[editingIndex].specificData['tree-unlocked-data']) {
+            try { currentUnlockedNodes = JSON.parse(characters[editingIndex].specificData['tree-unlocked-data']); } catch(e){}
+        } else {
+            currentUnlockedNodes = [];
+        }
+    }
+    document.getElementById('tree-unlocked-data').value = JSON.stringify(currentUnlockedNodes);
+
+    // Renderiza Linhas (SVG)
+    nodes.forEach(node => {
+        if(node.parent) {
+            const parent = nodes.find(n => n.id === node.parent);
+            if(parent) {
+                const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                line.setAttribute('x1', parent.x + '%');
+                line.setAttribute('y1', parent.y + '%');
+                line.setAttribute('x2', node.x + '%');
+                line.setAttribute('y2', node.y + '%');
+                line.setAttribute('class', 'tree-line');
+                line.setAttribute('id', `line-${parent.id}-${node.id}`);
+                
+                if(currentUnlockedNodes.includes(node.id)) {
+                    line.classList.add('unlocked');
+                }
+                svgContainer.appendChild(line);
+            }
+        }
+    });
+
+    // Renderiza Nodos (HTML)
+    nodes.forEach(node => {
+        const div = document.createElement('div');
+        div.className = 'tree-node';
+        div.style.left = node.x + '%';
+        div.style.top = node.y + '%';
+        div.id = `node-${node.id}`;
+        
+        let initial = node.name.substring(0,2).toUpperCase();
+        div.innerHTML = `<span>${initial}</span><div class="tree-node-label">${node.name}</div>`;
+        
+        if(currentUnlockedNodes.includes(node.id)) {
+            div.classList.add('unlocked');
+        }
+        
+        div.onclick = () => handleNodeClick(node, nature);
+        nodesContainer.appendChild(div);
+    });
+}
+
+function handleNodeClick(node, nature) {
+    const infoBox = document.getElementById('tree-node-info');
+    let statusText = currentUnlockedNodes.includes(node.id) ? '<span style="color:var(--theme-color)">[DESBLOQUEADO]</span>' : '<span style="color:#888">[BLOQUEADO]</span>';
+    
+    infoBox.innerHTML = `<strong>${node.name}</strong> ${statusText}<br>${node.desc}`;
+    
+    if(!isEditMode) return; // Se não puder editar, só mostra a info
+    
+    // Verifica se pode desbloquear
+    if(!currentUnlockedNodes.includes(node.id)) {
+        let canUnlock = false;
+        if(node.parent === null) canUnlock = true;
+        else if (currentUnlockedNodes.includes(node.parent)) canUnlock = true;
+        
+        if(canUnlock) {
+            // Adiciona botão para desbloquear
+            infoBox.innerHTML += `<br><button class="souls-btn small-btn" style="margin-top:10px;" onclick="unlockNode('${node.id}', '${nature}')">Desbloquear Habilidade</button>`;
+        } else {
+            infoBox.innerHTML += `<br><span style="color:red; font-size:0.8rem;">Requer habilidade anterior desbloqueada.</span>`;
+        }
+    } else {
+         infoBox.innerHTML += `<br><button class="souls-btn small-btn" style="margin-top:10px; border-color:red; color:red;" onclick="relockNode('${node.id}', '${nature}')">Revogar Habilidade</button>`;
+    }
+}
+
+function unlockNode(nodeId, nature) {
+    if(!currentUnlockedNodes.includes(nodeId)) {
+        currentUnlockedNodes.push(nodeId);
+        document.getElementById('tree-unlocked-data').value = JSON.stringify(currentUnlockedNodes);
+        renderTree(nature);
+        
+        // Re-clica no nó para atualizar o painel inferior
+        const nodes = treeData[nature];
+        const node = nodes.find(n => n.id === nodeId);
+        if(node) handleNodeClick(node, nature);
+    }
+}
+
+function relockNode(nodeId, nature) {
+    // Remove este nó e todos os filhos dele recursivamente
+    let toRemove = [nodeId];
+    const nodes = treeData[nature];
+    
+    let changed = true;
+    while(changed) {
+        changed = false;
+        nodes.forEach(n => {
+            if(toRemove.includes(n.parent) && !toRemove.includes(n.id)) {
+                toRemove.push(n.id);
+                changed = true;
+            }
+        });
+    }
+    
+    currentUnlockedNodes = currentUnlockedNodes.filter(id => !toRemove.includes(id));
+    document.getElementById('tree-unlocked-data').value = JSON.stringify(currentUnlockedNodes);
+    renderTree(nature);
+    
+    const node = nodes.find(n => n.id === nodeId);
+    if(node) handleNodeClick(node, nature);
 }

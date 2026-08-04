@@ -9,6 +9,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js"></script>
     <link rel="stylesheet" href="css/style.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
 </head>
 <body>
     <div id="particles"></div>
@@ -92,9 +93,51 @@
                 <button class="souls-btn" onclick="showScreen('screen-ancoragem')" style="border-color:#ff00ff; color:#ff00ff; padding: 20px 50px; font-size: 1.5rem; text-shadow: 0 0 10px #ff00ff; box-shadow: 0 0 20px rgba(255,0,255,0.2);">
                     ANCORAGEM (SALA DOS MESTRES)
                 </button>
+                <button class="souls-btn" onclick="openCodex()" style="border-color:#7aa7ff; color:#9fc1ff; padding: 12px 35px; font-size: 1.05rem; box-shadow: 0 0 15px rgba(100,150,255,0.15);">
+                    CÓDICE DOS MUNDOS (REGRAS & EXPANSÕES)
+                </button>
                 <button id="btn-admin-panel" class="souls-btn" onclick="openAdminPanel()" style="display:none; border-color:#00ffcc; color:#00ffcc; padding: 10px 30px; font-size: 1rem;">
                     SISTEMA DO ARCONTE (ADM)
                 </button>
+            </div>
+        </section>
+
+        <!-- TELA 0.5: CÓDICE DOS MUNDOS — BIBLIOTECA PÚBLICA -->
+        <section id="screen-codex" class="screen codex-screen">
+            <button class="back-btn" onclick="showScreen('screen-mode-select')">&#8592; Retornar à Encruzilhada</button>
+            <div class="souls-header">
+                <h2>Códice dos Mundos</h2>
+                <p>Biblioteca comum do cenário. Mestres e jogadores podem consultar os arquivos disponibilizados pelo ADM.</p>
+            </div>
+
+            <div class="codex-library-shell">
+                <div class="codex-library-toolbar">
+                    <div>
+                        <span class="codex-library-kicker">ARQUIVO COMUM</span>
+                        <h3>Biblioteca dos Mundos</h3>
+                        <p>Os arquivos abaixo ficam disponíveis para todos os usuários desta instalação.</p>
+                    </div>
+                    <div id="codex-admin-tools" class="codex-admin-tools" style="display:none;">
+                        <label class="souls-btn small-btn codex-upload-btn" for="codex-file-upload">＋ ADICIONAR ARQUIVO</label>
+                        <input id="codex-file-upload" type="file" multiple hidden onchange="adminUploadCodexFiles(this.files)">
+                    </div>
+                </div>
+
+                <div class="codex-access-note">
+                    <span>◈</span>
+                    <div><strong>Permissões do Códice</strong><br>
+                    <b>Jogador e Mestre:</b> leitura e consulta. <b>ADM:</b> adicionar e excluir arquivos para todos.</div>
+                </div>
+
+                <div id="codex-file-library" class="codex-file-library"></div>
+
+                <div class="codex-rule-reference">
+                    <div class="codex-mode-tabs">
+                        <button id="codex-tab-exodo" class="souls-btn small-btn active" onclick="renderCodex('exodo')">ÊXODO: ASSIMILAÇÃO</button>
+                        <button id="codex-tab-ocultatun" class="souls-btn small-btn" onclick="renderCodex('ocultatun')">OCULTATUN</button>
+                    </div>
+                    <div id="codex-content" class="codex-content"></div>
+                </div>
             </div>
         </section>
 
@@ -175,6 +218,7 @@
                     <button class="tab-btn" id="btn-tab-stats" onclick="openTab('tab-stats')">Atributos & Recursos</button>
                     <button class="tab-btn" id="btn-tab-skills" onclick="openTab('tab-skills')">Perícias & Talentos</button>
                     <button class="tab-btn" id="btn-tab-powers" onclick="openTab('tab-powers')">Poderes / Potências</button>
+                    <button class="tab-btn" id="btn-tab-equipment" onclick="openTab('tab-equipment')">⚙️ Dispositivos & Equipamentos</button>
                 </div>
 
                 <form id="char-form" onsubmit="saveCharacter(event)">
@@ -282,6 +326,16 @@
                         <div class="dynamic-list" id="powers-list"></div>
                     </div>
                     
+                    <div id="tab-equipment" class="tab-content">
+                        <div class="equipment-sheet-panel">
+                            <div class="equipment-sheet-head">
+                                <div><span class="eyebrow" id="equipment-sheet-eyebrow">ARSENAL</span><h3 id="equipment-sheet-title">Dispositivos & Equipamentos</h3><p id="equipment-sheet-subtitle">A estrutura desta janela acompanha o modo de jogo e a natureza da ficha.</p></div>
+                                <button type="button" class="souls-btn small-btn hide-on-view" onclick="openEquipmentAddModal()">+ ADICIONAR ITEM</button>
+                            </div>
+                            <div id="equipment-sheet-profile" class="equipment-sheet-profile"></div><div id="equipment-sheet-list" class="equipment-sheet-list"></div>
+                        </div>
+                    </div>
+
                     <div id="tab-specific" class="tab-content">
                         <div id="specific-content-container"></div>
                     </div>
@@ -301,6 +355,9 @@
                     <button class="souls-btn small-btn" onclick="toggleVttWindow('vtt-gallery-window')">🖼️ Galeria</button>
                     <button class="souls-btn small-btn" onclick="toggleVttWindow('vtt-dice-box')">🎲 Dados</button>
                     <button class="souls-btn small-btn" onclick="toggleVttWindow('vtt-chat-box')">💬 Chat</button>
+                    <button class="souls-btn small-btn" onclick="openVttEquipmentWindow()">⚙️ Equipamentos</button>
+                    <button class="souls-btn small-btn gm-only-btn" onclick="openEquipmentShop()" style="display:none; border-color:#d4af37; color:#d4af37;">🛒 Loja de Arsenal</button>
+                    <button class="souls-btn small-btn gm-only-btn" onclick="openForgeWindow()" style="display:none; border-color:#ff00ff; color:#ff00ff;">⚒️ Forja de Itens</button>
                     
                     <button class="souls-btn small-btn gm-only-btn" onclick="openThemeEditor()" style="display:none; border-color:#ff00ff; color:#ff00ff;">Tema</button>
                     <button class="souls-btn small-btn gm-only-btn" onclick="toggleNPCHealthVisibility()" style="display:none;">HP: <span id="npc-hp-status">Público</span></button>
@@ -395,6 +452,13 @@
                         </div>
                         <ul id="dice-history-list" style="list-style:none; padding:0; text-align:left; font-size:0.85rem; max-height:150px; overflow-y:auto;"></ul>
                     </div>
+                </div>
+            </div>
+
+            <div id="vtt-equipment-window" class="vtt-floating-window" style="width:760px; max-width:94vw; max-height:82vh; display:none;">
+                <div class="vtt-window-header" id="equipment-window-header"><span class="vtt-font">Arsenal da Fenda</span><button class="win-close-btn" onclick="toggleVttWindow('vtt-equipment-window')">X</button></div>
+                <div class="vtt-window-body" style="overflow-y:auto;">
+                    <div id="vtt-equipment-list" class="vtt-equipment-list"></div>
                 </div>
             </div>
 
@@ -516,6 +580,35 @@
             </div>
         </div>
 
+        <div id="equipment-shop-modal" class="modal" style="z-index:10020;">
+            <div class="modal-content equipment-modal-content">
+                <div class="equipment-modal-head"><div><span class="eyebrow" id="equipment-shop-eyebrow">SALA BRANCA · ARSENAL</span><h3 id="equipment-shop-title">Loja de Dispositivos & Equipamentos</h3><p id="equipment-shop-subtitle">Catálogo filtrado pelo modo de jogo da mesa.</p></div><button class="win-close-btn" onclick="closeEquipmentShop()">X</button></div>
+                <div id="equipment-shop-list" class="shop-grid"></div>
+            </div>
+        </div>
+
+        <div id="forge-modal" class="modal" style="z-index:10021;">
+            <div class="modal-content equipment-modal-content">
+                <div class="equipment-modal-head"><div><span class="eyebrow" id="forge-eyebrow">ENGENHARIA DE CONSTRUÇÃO · PE</span><h3 id="forge-title">Forja de Itens</h3><p id="forge-subtitle">A estrutura da forja acompanha o sistema de equipamento do modo.</p></div><button class="win-close-btn" onclick="closeForgeWindow()">X</button></div>
+                <div id="forge-grid" class="forge-grid">
+                    <div class="form-group"><label>Nome do item</label><input id="forge-name" placeholder="Ex.: Lâmina da Agonia Veloz"></div>
+                    <div class="form-group"><label>Chassi</label><select id="forge-chassis" onchange="updateForgeCost()"><option value="Ligeiro" data-pe="2">Ligeiro — 2 PE</option><option value="Padrão" data-pe="5">Padrão — 5 PE</option><option value="Massivo" data-pe="8">Massivo — 8 PE</option><option value="Proteção" data-pe="4">Proteção — 4 PE</option><option value="Utilitário" data-pe="3">Utilitário — 3 PE</option></select></div>
+                    <div class="form-group"><label>Categoria</label><select id="forge-category" onchange="updateForgeCost()"><option value="Ritualístico">Ritualístico — -5 PE</option><option value="Anômalo">Anômalo — custo integral</option></select></div>
+                    <div class="form-group"><label>Estágio (1–10)</label><input id="forge-stage" type="number" min="1" max="10" value="1" onchange="updateForgeCost()"></div>
+                    <div class="form-group"><label>Vetores de Manifestação</label><select id="forge-vectors" multiple size="5" onchange="updateForgeCost()"><option value="Destrutiva">Destrutiva</option><option value="Fissura">Fissura</option><option value="Manipulação">Manipulação</option><option value="Protetiva">Protetiva</option><option value="Restauração">Restauração</option></select><small>5 PE por VM. Segure Ctrl/toque para múltiplas seleções.</small></div>
+                    <div class="form-group"><label>Destino</label><select id="forge-recipient"></select></div>
+                    <div class="forge-preview" id="forge-preview">Custo estimado: 0 PE</div>
+                    <div class="form-group forge-notes"><label>Efeito / VF / observações</label><textarea id="forge-effect" rows="4" placeholder="Descreva o efeito mundano, VF e particularidades."></textarea></div>
+                </div>
+                <div id="forge-exodo-message" class="forge-mode-message" style="display:none"></div>
+                <div class="modal-actions"><button class="souls-btn small-btn" onclick="forgeItemForTable()">FORJAR E ENTREGAR</button><button class="souls-btn small-btn" style="border-color:#ff3333;color:#ff3333" onclick="closeForgeWindow()">Cancelar</button></div>
+            </div>
+        </div>
+
+        <div id="equipment-add-modal" class="modal" style="z-index:10022;">
+            <div class="modal-content equipment-add-content" style="max-width:560px"><div class="equipment-modal-head"><div><span class="eyebrow" id="equipment-add-eyebrow">ARSENAL</span><h3 id="equipment-add-title" style="color:#d4af37;font-family:Cinzel,serif">Adicionar ao Arsenal</h3><p id="equipment-add-subtitle"></p></div><button class="win-close-btn" onclick="document.getElementById('equipment-add-modal').style.display='none'">X</button></div><div class="form-group"><label id="sheet-eq-name-label">Nome</label><input id="sheet-eq-name" placeholder="Nome do dispositivo/equipamento"></div><div class="form-group"><label id="sheet-eq-type-label">Categoria / tipo</label><input id="sheet-eq-type" placeholder="Tipo do item"></div><div class="form-group"><label id="sheet-eq-meta-label">Dados do modo</label><input id="sheet-eq-meta" placeholder="Dados específicos do modo"></div><div class="form-group"><label id="sheet-eq-effect-label">Efeito / descrição</label><textarea id="sheet-eq-effect" rows="4"></textarea></div><div class="modal-actions"><button class="souls-btn small-btn" onclick="addEquipmentToCurrentSheet()">Adicionar</button><button class="souls-btn small-btn" style="border-color:#ff3333;color:#ff3333" onclick="document.getElementById('equipment-add-modal').style.display='none'">Cancelar</button></div></div>
+        </div>
+
         <div id="manage-players-modal" class="modal" style="z-index:9999;">
             <div class="modal-content">
                 <h3 style="color: #ff5500; font-family: 'Cinzel', serif; margin-bottom: 15px;">Gerenciar Almas na Fenda</h3>
@@ -584,6 +677,9 @@
         <img id="fs-img" src="" alt="Fullscreen">
     </div>
 
+    <script src="js/codex.js"></script>
+    <script>window.CODEX_FILE_CATALOG=[{"id": "livro-base-mundos-sombrios-ocultatun-ecos1-5-1", "title": "Livro Base — Ocultatun: Ecos 1.5", "mode": "OCULTATUN", "type": "PDF", "file": "codex-files/Livro_Base-Mundos-Sombrios_Ocultatun_Ecos1.5.(1).pdf", "source": "arquivo anexado ao projeto"}];</script>\n    <script src="js/codex-library.js"></script>
     <script src="js/script.js"></script>
+    <script src="js/linhagem-tree.js"></script>
 </body>
 </html>

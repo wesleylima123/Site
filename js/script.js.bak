@@ -65,8 +65,6 @@ let tablePlayers = [];
 let myVttCharIndex = -1; 
 let npcHpHidden = false;
 let diceHistory = [];
-let currentSheetEquipment = [];
-let selectedVttEquipmentCharId = null;
 
 // ==========================================
 // AUTHENTICATION LOGIC
@@ -510,23 +508,18 @@ function applyNatureTheme(nature) {
 
 // NAVIGATION
 function showScreen(id) {
-    const target = document.getElementById(id);
-    if(!target) {
-        console.error('[Mundos Sombrios] Tela não encontrada:', id);
-        return false;
-    }
     document.querySelectorAll('.screen').forEach(s => s.classList.remove('active', 'overlay'));
+    const target = document.getElementById(id);
     target.classList.add('active');
     
     if(id === 'screen-char-select') {
         isEditMode = true; 
-        if(typeof renderCharList === 'function') renderCharList();
-        if(currentUser) document.getElementById('sanctuary-limits').innerText = `Almas Vivas: ${characters.length} / ${currentUser.role === 'jogador' ? 5 : 10}`;
+        renderCharList();
+        document.getElementById('sanctuary-limits').innerText = `Almas Vivas: ${characters.length} / ${currentUser.role === 'jogador' ? 5 : 10}`;
     }
-    if(id === 'screen-ancoragem' && typeof renderAncoragem === 'function') {
+    if(id === 'screen-ancoragem') {
         renderAncoragem();
     }
-    return true;
 }
 
 function selectGameMode(mode) {
@@ -711,38 +704,16 @@ function confirmJoinTable() {
 
 // BUILDER FUNCTIONS (RESTRUCTURED CLASSES AND EXPANSIONS)
 function initBuilderForSelectedMode() {
-    // Entrada robusta: o botão não depende de estados residuais da sessão ou da ficha anterior.
-    if(!currentUser) {
-        alert('A sessão do Santuário expirou. Entre novamente no Vazio.');
-        showScreen('screen-login');
-        return false;
-    }
-    const mode = (selectedGameMode === 'exodo' || selectedGameMode === 'ocultatun')
-        ? selectedGameMode : (document.getElementById('char-mode')?.value || '');
-    if(!mode || !ruleset[mode]) {
-        alert('Escolha primeiro o modo de jogo: Êxodo ou Ocultatun.');
-        showScreen('screen-mode-select');
-        return false;
-    }
     const LIMIT = currentUser.role === 'jogador' ? 5 : 10;
-    if(!Array.isArray(characters)) characters = [];
     if(characters.length >= LIMIT) {
         alert(`O limite de ${LIMIT} almas forjadas foi atingido.`);
-        return false;
-    }
-    const requiredIds = ['char-form','char-name','nature-grid','class-container','specific-content-container'];
-    const missing = requiredIds.filter(id => !document.getElementById(id));
-    if(missing.length) {
-        console.error('[Mundos Sombrios] Elementos ausentes no construtor:', missing);
-        alert('Não foi possível abrir a criação de ficha porque a janela está incompleta. Recarregue o site.');
-        return false;
+        return;
     }
 
     editingIndex = null;
     currentAvatarBase64 = '';
     currentGallery = [];
     currentPowerDraft = [];
-    currentSheetEquipment = [];
     isEditMode = true;
 
     document.getElementById('char-form').reset();
@@ -750,20 +721,22 @@ function initBuilderForSelectedMode() {
     document.querySelectorAll('.attr-input').forEach(el => el.value = '0');
     document.getElementById('pts-count').value = '0';
     document.querySelectorAll('.res-val-input').forEach(el => el.value = '');
+    
     document.getElementById('avatar-preview-container').innerHTML = '<span style="color:#666; font-size:0.8rem;">Nenhum retrato</span>';
     document.getElementById('gallery-container').innerHTML = '';
     document.getElementById('skills-list').innerHTML = '';
     document.getElementById('powers-list').innerHTML = '';
-    renderEquipmentSheet();
     document.getElementById('specific-content-container').innerHTML = '';
+    
     currentUnlockedNodes = [];
-    if(document.getElementById('tree-unlocked-data')) document.getElementById('tree-unlocked-data').value = '';
+    if(document.getElementById('tree-unlocked-data')) {
+        document.getElementById('tree-unlocked-data').value = '';
+    }
 
-    selectedGameMode = mode;
-    populateSelects(mode);
-    if(!startBuilder(mode)) return false;
+    populateSelects(selectedGameMode);
+    startBuilder(selectedGameMode);
+
     toggleEditUI();
-    return true;
 }
 
 function populateSelects(mode) {
@@ -785,21 +758,16 @@ function populateSelects(mode) {
 }
 
 function startBuilder(mode) {
-    if(mode !== 'exodo' && mode !== 'ocultatun' || !ruleset[mode]) {
-        console.error('[Mundos Sombrios] Modo inválido ao abrir o construtor:', mode);
-        return false;
-    }
     currentMode = mode;
-    const modeInput = document.getElementById('char-mode');
-    if(!modeInput) return false;
-    modeInput.value = mode;
+    document.getElementById('char-mode').value = mode;
+    
     const natureGrid = document.getElementById('nature-grid');
-    if(!natureGrid) return false;
     natureGrid.innerHTML = '';
     document.getElementById('char-nature').value = '';
     document.getElementById('nature-description').style.display = 'none';
     document.getElementById('class-container').style.display = 'none';
     document.getElementById('char-class').value = '';
+    
     Object.keys(ruleset[mode].natures).forEach(n => {
         const natureData = ruleset[mode].natures[n];
         const card = document.createElement('div');
@@ -808,9 +776,9 @@ function startBuilder(mode) {
         card.onclick = () => selectNature(n);
         natureGrid.appendChild(card);
     });
+    
     showScreen('screen-builder');
     openTab('tab-identity');
-    return true;
 }
 
 function selectNature(natureName) {
@@ -862,8 +830,6 @@ function selectNature(natureName) {
     }
     
     updatePowerSelects(currentNature);
-    applyEquipmentProfile({mode:currentMode,nature:currentNature,name:document.getElementById('char-name')?.value||''});
-    renderEquipmentSheet();
     recalculateStats();
 }
 
@@ -1295,7 +1261,6 @@ function saveCharacter(e) {
         resources: resources,
         skillsHtml: skills,
         powersHtml: powers,
-        equipment: currentSheetEquipment,
         specificData: specificData
     };
     
@@ -1369,15 +1334,11 @@ function loadCharacterToBuilder(index, sourceArray = characters, restrictToIdent
         });
     }
 
-    currentSheetEquipment = Array.isArray(char.equipment) ? JSON.parse(JSON.stringify(char.equipment)) : [];
-    renderEquipmentSheet();
-
     // Restrictions
     if(restrictToIdentity) {
         document.getElementById('btn-tab-stats').style.display = 'none';
         document.getElementById('btn-tab-skills').style.display = 'none';
         document.getElementById('btn-tab-powers').style.display = 'none';
-        document.getElementById('btn-tab-equipment').style.display = 'none';
         isEditMode = false;
         document.getElementById('btn-toggle-edit').style.display = 'none';
         document.getElementById('upload-avatar-group').style.display = 'none';
@@ -1387,7 +1348,6 @@ function loadCharacterToBuilder(index, sourceArray = characters, restrictToIdent
         document.getElementById('btn-tab-stats').style.display = '';
         document.getElementById('btn-tab-skills').style.display = '';
         document.getElementById('btn-tab-powers').style.display = '';
-        document.getElementById('btn-tab-equipment').style.display = '';
         
         const inVTT = document.getElementById('screen-vtt').classList.contains('active');
         if(inVTT && isVttGM) {
@@ -1559,147 +1519,49 @@ async function downloadPDF() {
     toggleEditUI();
 }
 
+function exportCharacterJSON() {
+    if (editingIndex === null) return;
+    const sourceArray = document.getElementById('screen-vtt').classList.contains('active') ? tablePlayers : characters;
+    const char = sourceArray[editingIndex];
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(char, null, 2));
+    const downloadAnchorNode = document.createElement('a');
+    downloadAnchorNode.setAttribute("href", dataStr);
+    let safeName = (char.name || "Alma_Desconhecida").replace(/\s+/g, '_');
+    downloadAnchorNode.setAttribute("download", safeName + "_Ficha.json");
+    document.body.appendChild(downloadAnchorNode);
+    downloadAnchorNode.click();
+    downloadAnchorNode.remove();
+}
 
-// ==========================================
-// ARSENAL / DISPOSITIVOS & EQUIPAMENTOS
-// ==========================================
-const PREMADE_EQUIPMENT = [
- {name:'Pistola “NULO”', faction:'ALFA-01 — Os Ceifadores', category:'Ritualístico', chassis:'Ligeiro', pe:6, stage:2, charges:null, effect:'Base 1d6. VF Silenciamento: sem estampido convencional; identificação da origem -5. VF Marca Fantasma: 1 Pressão para marcar alvo; +2 para rastreá-lo até fim da cena.'},
- {name:'Kit de Apagamento', faction:'ALFA-01 — Os Ceifadores', category:'Ritualístico', chassis:'Utilitário', pe:7, stage:2, effect:'Apaga digitais, sangue, resíduos de EP, registros eletrônicos simples e evidências de presença.'},
- {name:'Rifle Predador', faction:'SIGMA-33 — Os Predadores', category:'Ritualístico', chassis:'Padrão', pe:16, stage:3, effect:'Base 1d10. VF Munição de Linhagem: +2 dano contra criaturas anômalas. VF Rompe-Regeneração: alvo com regeneração perde regeneração até próximo turno.'},
- {name:'Kit de Caça Anômala', faction:'SIGMA-33 — Os Predadores', category:'Ritualístico', chassis:'Utilitário', pe:7, stage:2, effect:'+2 em Investigação e Sobrevivência para rastrear criaturas anômalas.'},
- {name:'Escopeta Exorcista', faction:'ECTA-44 — Os Últimos Caçadores', category:'Ritualístico', chassis:'Massivo', pe:14, stage:3, effect:'Base 1d12. VF Cinza Consagrada: +2 dano contra entidades infernais. VF Quebra-Pacto: acerto reduz em 2 resistência espiritual até próximo turno.'},
- {name:'Selo de Ruptura', faction:'ECTA-44 — Os Últimos Caçadores', category:'Ritualístico', chassis:'Utilitário', pe:7, stage:2, effect:'Bloqueia possessão, invocação, teleporte infernal ou fuga planar menor.'},
- {name:'Rifle de Fase', faction:'C-137 — Os Desbravadores do Além', category:'Anômalo', chassis:'Padrão', pe:23, stage:4, effect:'Base 1d10. Ativação: 1d4 Mental ou -5 PV. VF Penetração Dimensional: ignora cobertura física comum. VF Fase Instável: alvo -2 Defesa Passiva contra próximo ataque.'},
- {name:'Âncora Temporal', faction:'C-137 — Os Desbravadores do Além', category:'Anômalo', chassis:'Utilitário', pe:14, stage:3, effect:'Ativação: 1d4 Mental ou -5 PV. Impede teleporte, deslocamento ou arrastamento temporal por 1 rodada.'},
- {name:'Canhão de Estaca', faction:'SIGMA-02 — Os Bate-Estaca', category:'Ritualístico', chassis:'Massivo', pe:19, stage:3, effect:'Base 1d12. VF Perfurador de Colosso: +1 dado de dano contra criaturas Grandes ou superiores. VF Âncora Cinética: acerto reduz deslocamento em 3m.'},
- {name:'Lança-Âncora', faction:'SIGMA-02 — Os Bate-Estaca', category:'Ritualístico', chassis:'Padrão', pe:9, stage:2, effect:'Prende criatura grande a uma estrutura.'},
- {name:'Injetor de Calma', faction:'EPSILON-00 — Mente Sã', category:'Ritualístico', chassis:'Utilitário', pe:7, stage:2, effect:'Remove 1d6 Estresse ou concede +2 Vontade por 1 cena.'},
- {name:'Kit de Lacuna', faction:'EPSILON-00 — Mente Sã', category:'Anômalo', chassis:'Utilitário', pe:14, stage:3, effect:'Ativação: 1d4 Mental ou -5 PV. Permite apagar uma memória específica de baixa complexidade.'},
- {name:'Pistola de Identidade', faction:'DELTA-02 — Olho do Saber', category:'Ritualístico', chassis:'Ligeiro', pe:6, stage:2, effect:'Base 1d6. VF Arma de Serviço: assume aparência de arma pequena mundana. VF Assinatura Limpa: investigação balística -5.'},
- {name:'Máscara Biométrica', faction:'DELTA-02 — Olho do Saber', category:'Anômalo', chassis:'Utilitário', pe:19, stage:3, effect:'Ativação: 1d4 Mental ou -5 PV. +5 para evitar reconhecimento.'},
- {name:'Rifle Funerário', faction:'TÂNATOS-01 — Os Coveiros', category:'Ritualístico', chassis:'Padrão', pe:11, stage:3, effect:'Base 1d10. VF Cinza Terminal: +2 dano contra mortos-vivos. VF Não Retorne: morto-vivo derrotado não pode realizar reanimação simples até fim da cena.'},
- {name:'Caixa de Sepultamento', faction:'TÂNATOS-01 — Os Coveiros', category:'Ritualístico', chassis:'Utilitário', pe:7, stage:2, effect:'Sela restos, objetos ou manifestações menores.'},
- {name:'Maleta de Selagem', faction:'ÔMEGA-01 — O Relicário', category:'Ritualístico', chassis:'Utilitário', pe:9, stage:3, effect:'Pode conter objeto anômalo pequeno, documento, componente, amostra ou artefato de baixa Capacidade.'},
- {name:'Chave do Pináculo', faction:'ÔMEGA-01 — O Relicário', category:'Anômalo', chassis:'Ligeiro', pe:18, stage:3, effect:'Ativação: 1d4 Mental ou -5 PV. Pode abrir acesso para armazenamento da Ocultatun, se o Mestre determinar disponibilidade.'},
- {name:'Lâmina da Agonia Veloz', faction:'Exemplo de Forja', category:'Ritualístico', chassis:'Padrão', pe:11, stage:3, effect:'Espada de oficial da Ocultatun. Causa dano Cap 3; após o combate, corre risco de enferrujar e perder corte.'},
- {name:'O Olho de Vidro do Abismo', faction:'Exemplo de Forja', category:'Anômalo', chassis:'Utilitário', pe:23, stage:5, effect:'Amuleto com cristal de um Nexo que permite ver através de paredes. Ao ativar, usuário perde 5 PV.'}
-];
-
-function getEquipmentProfile(char=currentBuilderCharacter()){
-    const nature=char?.nature||currentNature||'';
-    const inferredMode=(char?.mode)||(nature.includes('Ocultatun')||nature.includes('Envolto')||nature.includes('Ordem dos Sete')?'ocultatun':null)||currentMode||'exodo';
-    const mode=inferredMode;
-    if(mode==='ocultatun') return {
-        mode:'ocultatun', key:'ocultatun', eyebrow:'OCULTATUN · ARSENAL ANÔMALO', title:'Arsenal Anômalo & Ritualístico',
-        subtitle:'Itens construídos por Chassi + Vetores de Manifestação + Estágio + Categoria. O item mantém PE, ES e Cargas de Integridade.',
-        addTitle:'Registrar equipamento da Ocultatun', addSubtitle:'Use os campos técnicos do sistema PE.',
-        labels:['Nome do item','Categoria / tipo','PE · ES · Cargas','Efeito / VF / observações'],
-        placeholders:['Lâmina, rifle, dispositivo...','Ritualístico ou Anômalo · Chassi','Ex.: 11 PE · ES 3 · 10 cargas','Descreva Chassi, VM, VF, efeito e particularidades.'],
-        fields:'ocultatun'
+function importCharacterJSON(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    
+    const LIMIT = currentUser.role === 'jogador' ? 5 : 10;
+    if (characters.length >= LIMIT) {
+        alert(`O limite de ${LIMIT} almas forjadas foi atingido.`);
+        event.target.value = '';
+        return;
+    }
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        try {
+            const importedChar = JSON.parse(e.target.result);
+            importedChar.id = Date.now();
+            importedChar.ownerId = currentUser.id;
+            characters.push(importedChar);
+            saveGlobalCharacters();
+            if(document.getElementById('screen-char-select').classList.contains('active')){
+                renderCharList();
+            }
+            alert(`Alma invocada do Vazio com sucesso!`);
+        } catch (err) {
+            alert("Erro fatal ao ler o Códice JSON.");
+        }
+        event.target.value = '';
     };
-    if(nature.includes('Operador de Sistema')) return {
-        mode:'exodo', key:'kafra', eyebrow:'ÊXODO · PROJETO PLAYER', title:'Repositório Kafra & Dispositivos',
-        subtitle:'Inventário de dispositivos vinculados à interface. Registre Smart-Link, PCs, origem e efeito de cada item.',
-        addTitle:'Registrar dispositivo Kafra', addSubtitle:'A ficha mantém o inventário separado das Potências.',
-        labels:['Nome do dispositivo','Tipo / Smart-Link','PC / vínculo / estado','Efeito / função'],
-        placeholders:['Ex.: Faca Fractal','Smart-Link · IA · dispositivo','Ex.: 2 PC · IA Domínios · íntegro','Função, bônus, interface ou observações.'],
-        fields:'kafra'
-    };
-    if(nature.includes('Classer')) return {
-        mode:'exodo', key:'linhagem', eyebrow:'ÊXODO · LINHAGEM HERDADA', title:'Equipamento de Campo & Atavismo',
-        subtitle:'Registro de equipamento compatível com o Classer, mantendo a evolução da linhagem separada da árvore LHL.',
-        addTitle:'Registrar equipamento de campo', addSubtitle:'O item não altera automaticamente LHL ou EB.',
-        labels:['Nome do equipamento','Tipo / função','Estado / vínculo','Efeito / observações'],
-        placeholders:['Ex.: arma, proteção, ferramenta...','Armamento · proteção · utilitário','Ex.: íntegro · vinculado à linhagem','Descrição do uso e efeitos.'],
-        fields:'linhagem'
-    };
-    return {
-        mode:'exodo', key:'exodo', eyebrow:'ÊXODO · DISPOSITIVOS DE CAMPO', title:'Dispositivos & Equipamentos de Êxodo',
-        subtitle:'Inventário de campo do Gene Êxodo. Registre o dispositivo, sua função, vínculo e estado sem misturar a economia PE da Ocultatun.',
-        addTitle:'Registrar dispositivo de Êxodo', addSubtitle:'CÊ, Assimilação e Estigma continuam sendo recursos da ficha; o item fica no inventário.',
-        labels:['Nome do dispositivo','Tipo / função','Vínculo / estado','Efeito / descrição'],
-        placeholders:['Ex.: equipamento de campo','Armamento · proteção · ferramenta · dispositivo','Ex.: CÊ · Estigma · íntegro','Descrição do uso, bônus ou limitações.'],
-        fields:'exodo'
-    };
+    reader.readAsText(file);
 }
-function currentBuilderCharacter(){
-    return {mode:currentMode||document.getElementById('char-mode')?.value||'exodo', nature:currentNature||document.getElementById('char-nature')?.value||'', name:document.getElementById('char-name')?.value||''};
-}
-function applyEquipmentProfile(char=currentBuilderCharacter()){
-    const p=getEquipmentProfile(char);
-    const set=(id,val)=>{const e=document.getElementById(id);if(e)e.textContent=val;};
-    set('equipment-sheet-eyebrow',p.eyebrow); set('equipment-sheet-title',p.title); set('equipment-sheet-subtitle',p.subtitle);
-    set('equipment-add-eyebrow',p.eyebrow); set('equipment-add-title',p.addTitle); set('equipment-add-subtitle',p.addSubtitle);
-    ['name','type','meta','effect'].forEach((k,i)=>{set('sheet-eq-'+k+'-label',p.labels[i]); const e=document.getElementById('sheet-eq-'+k); if(e)e.placeholder=p.placeholders[i];});
-    const profile=document.getElementById('equipment-sheet-profile');
-    if(profile) profile.innerHTML=p.key==='ocultatun'
-      ? '<span>PE de Arsenal</span><span>Chassi + VM + ES</span><span>Ritualístico / Anômalo</span><span>Cargas de Integridade / Gamma Lock</span>'
-      : p.key==='kafra' ? '<span>Smart-Link</span><span>Repositório Kafra</span><span>PC / vínculo de interface</span><span>Dispositivo de sistema</span>'
-      : '<span>Dispositivo de campo</span><span>Vínculo e estado</span><span>Função narrativa</span><span>Sem PE/ES de Ocultatun</span>';
-    const add=document.getElementById('equipment-add-modal'); if(add) add.dataset.profile=p.key;
-}
-function renderEquipmentSheet(){
- const c=document.getElementById('equipment-sheet-list'); if(!c)return;
- applyEquipmentProfile(); c.innerHTML='';
- if(!currentSheetEquipment.length){ c.innerHTML='<div class="equipment-empty">Nenhum item registrado nesta ficha.</div>'; return; }
- const p=getEquipmentProfile();
- currentSheetEquipment.forEach((it,i)=>{
-   const meta=p.key==='ocultatun'
-      ? `<span><b>PE</b>${escHtml(it.pe ?? '—')}</span><span><b>ES</b>${escHtml(it.stage ?? '—')}</span>${it.charges!==null&&it.charges!==undefined?`<span><b>Cargas</b>${escHtml(it.charges)}</span>`:''}`
-      : `<span><b>VÍNCULO</b>${escHtml(it.link||it.notes||'—')}</span><span><b>ESTADO</b>${escHtml(it.status||'Íntegro')}</span>`;
-   c.innerHTML += `<article class="equipment-item-card ${it.category==='Anômalo'?'anomalous':''} mode-${p.key}"><div class="equipment-item-main"><span class="equipment-tag">${escHtml(it.category||'Equipamento')}</span><h4>${escHtml(it.name)}</h4><p>${escHtml(it.effect||'Sem descrição.')}</p></div><div class="equipment-item-meta">${meta}<button class="hide-on-view equipment-remove" onclick="removeEquipmentFromCurrentSheet(${i})">×</button></div></article>`;
- });
-}
-function openEquipmentAddModal(){ applyEquipmentProfile(); document.getElementById('equipment-add-modal').style.display='flex'; }
-function addEquipmentToCurrentSheet(){
- const p=getEquipmentProfile(); const name=document.getElementById('sheet-eq-name').value.trim(); if(!name)return alert('Dê um nome ao item.');
- const type=document.getElementById('sheet-eq-type').value.trim()||'Equipamento'; const meta=document.getElementById('sheet-eq-meta').value.trim(); const effect=document.getElementById('sheet-eq-effect').value.trim()||'Sem descrição.';
- let item={name,category:type,effect,notes:meta,source:p.mode==='ocultatun'?'Registro manual da Ocultatun':'Registro manual de Êxodo'};
- if(p.key==='ocultatun'){ item.pe='—'; item.stage='—'; item.charges=null; item.notes=meta; }
- else { item.link=meta; item.status='Íntegro'; }
- currentSheetEquipment.push(normalizeEquipment(item)); renderEquipmentSheet(); document.getElementById('equipment-add-modal').style.display='none'; ['sheet-eq-name','sheet-eq-type','sheet-eq-meta','sheet-eq-effect'].forEach(id=>document.getElementById(id).value='');
-}
-function removeEquipmentFromCurrentSheet(i){ if(!isEditMode)return; currentSheetEquipment.splice(i,1); renderEquipmentSheet(); }
-function getVttCharById(id){ return tablePlayers.find(c=>String(c.id)===String(id)); }
-function renderVttEquipment(){
- const c=document.getElementById('vtt-equipment-list'); if(!c)return; c.innerHTML='';
- if(!tablePlayers.length){c.innerHTML='<div class="equipment-empty">Nenhuma ficha presente na mesa.</div>';return;}
- tablePlayers.forEach((p,i)=>{ const items=Array.isArray(p.equipment)?p.equipment:[], prof=getEquipmentProfile(p);
-   const meta=prof.key==='ocultatun'?'PE · ES · Cargas de Integridade':'Vínculo · Estado · Função';
-   c.innerHTML+=`<section class="vtt-player-arsenal mode-${prof.key}"><div class="vtt-player-arsenal-head"><div><span class="eyebrow">${escHtml(prof.eyebrow)}</span><h4>${escHtml(p.name)}</h4><p>${escHtml(meta)}</p></div><button class="souls-btn small-btn" onclick="openCharacterEquipmentFromVtt(${i})">ABRIR FICHA</button></div>${items.length?items.map(it=>`<div class="vtt-eq-row"><div><b>${escHtml(it.name)}</b><span>${escHtml(it.category||'Equipamento')} · ${prof.key==='ocultatun'?`PE ${escHtml(it.pe??'—')} · ES ${escHtml(it.stage??'—')}`:`${escHtml(it.link||'sem vínculo')} · ${escHtml(it.status||'Íntegro')}`}</span></div><p>${escHtml(it.effect||'')}</p></div>`).join(''):'<div class="equipment-empty compact">Sem equipamentos registrados.</div>'}</section>`;
- });
-}
-function openVttEquipmentWindow(){ renderVttEquipment(); toggleVttWindow('vtt-equipment-window'); }
-function openCharacterEquipmentFromVtt(index){ const builder=document.getElementById('screen-builder'); builder.classList.add('overlay'); loadCharacterToBuilder(index,tablePlayers,!isVttGM && !tablePlayers[index].isMe); setTimeout(()=>{applyEquipmentProfile(tablePlayers[index]);openTab('tab-equipment');},30); }
-
-function getTableGameMode(){ const modes=tablePlayers.map(p=>p.mode || ((p.nature||'').includes('Ocultatun')||(p.nature||'').includes('Envolto')||(p.nature||'').includes('Ordem dos Sete')?'ocultatun':'exodo')).filter(Boolean); return modes[0]||currentMode||'ocultatun'; }
-function openEquipmentShop(){ renderEquipmentShop(); document.getElementById('equipment-shop-modal').style.display='flex'; }
-function closeEquipmentShop(){ document.getElementById('equipment-shop-modal').style.display='none'; }
-function renderEquipmentShop(){
- const c=document.getElementById('equipment-shop-list'); if(!c)return; const mode=getTableGameMode();
- const eyebrow=document.getElementById('equipment-shop-eyebrow'), title=document.getElementById('equipment-shop-title'), sub=document.getElementById('equipment-shop-subtitle');
- if(mode!=='ocultatun'){
-   if(eyebrow)eyebrow.textContent='ÊXODO · CATÁLOGO DE CAMPO'; if(title)title.textContent='Loja de Dispositivos de Êxodo'; if(sub)sub.textContent='Nenhum catálogo pré-pronto de equipamentos de Êxodo está registrado nesta versão dos arquivos do site.';
-   c.innerHTML='<div class="equipment-empty shop-empty">O catálogo pré-pronto disponível nos arquivos atuais é o Arsenal Anômalo/Ritualístico da Ocultatun. A loja de Êxodo permanece separada para não importar regras do sistema PE para este modo.</div>'; return;
- }
- if(eyebrow)eyebrow.textContent='SALA BRANCA · LOJA DO MERCADOR'; if(title)title.textContent='Loja de Arsenal da Ocultatun'; if(sub)sub.textContent='Itens pré-prontos do sistema Chassi + Vetores + Estágio + Categoria.';
- c.innerHTML=PREMADE_EQUIPMENT.map((it,i)=>`<article class="shop-item ${it.category==='Anômalo'?'anomalous':''}"><div><span class="equipment-tag">${escHtml(it.category)}</span><h4>${escHtml(it.name)}</h4><small>${escHtml(it.faction)} · ${escHtml(it.chassis)} · ${it.pe} PE · ES ${it.stage}</small><p>${escHtml(it.effect)}</p></div><button class="souls-btn small-btn" onclick="givePremadeEquipment(${i})">ENTREGAR</button></article>`).join('');
-}
-function givePremadeEquipment(i){ if(!isVttGM)return; const it=PREMADE_EQUIPMENT[i]; const targets=tablePlayers.filter(p=>!p.isNPC && (p.mode || ((p.nature||'').includes('Ocultatun')||(p.nature||'').includes('Envolto')||(p.nature||'').includes('Ordem dos Sete')?'ocultatun':'exodo'))==='ocultatun'); if(!targets.length)return alert('A loja da Ocultatun só pode entregar itens a uma ficha do modo Ocultatun.'); const names=targets.map((p,idx)=>`${idx+1}. ${p.name}`).join('\n'); const choice=prompt(`Entregar ${it.name} para:\n${names}\n\nDigite o número:`); const n=Number(choice)-1; if(!Number.isInteger(n)||!targets[n])return; const target=targets[n]; target.equipment=Array.isArray(target.equipment)?target.equipment:[]; const item=normalizeEquipment({...it,charges:10+(Number(target.stats?.vig)||0)-Number(it.stage||0),source:'Loja da Ocultatun'}); target.equipment.push(item); syncVttCharacterToOwner(target); renderVttCards(); renderVttEquipment(); renderEquipmentShop(); alert(`${it.name} entregue a ${target.name}.`); }
-function syncVttCharacterToOwner(char){ if(!char||char.isNPC)return; const idx=allCharactersDB.findIndex(c=>c.id===char.id); if(idx>=0){ allCharactersDB[idx].equipment=char.equipment; localStorage.setItem('mundosSombriosChars',JSON.stringify(allCharactersDB)); characters=allCharactersDB.filter(c=>c.ownerId===currentUser.id); } }
-function openForgeWindow(){
- const mode=getTableGameMode();
- const eyebrow=document.getElementById('forge-eyebrow'), title=document.getElementById('forge-title'), sub=document.getElementById('forge-subtitle');
- const grid=document.getElementById('forge-grid'), msg=document.getElementById('forge-exodo-message'), submit=document.querySelector('#forge-modal .modal-actions .souls-btn');
- if(mode!=='ocultatun') { if(eyebrow)eyebrow.textContent='ÊXODO · FORJA DE DISPOSITIVOS'; if(title)title.textContent='Registro de Dispositivos de Êxodo'; if(sub)sub.textContent='A forja técnica Chassi + VM + ES é exclusiva do sistema de equipamentos da Ocultatun.'; if(grid)grid.style.display='none'; if(msg){msg.style.display='block';msg.innerHTML='<strong>Modo Êxodo</strong><span>Os arquivos atuais não definem aqui uma fórmula de forja equivalente ao sistema PE da Ocultatun. Registre o dispositivo diretamente na janela de equipamentos da ficha para não importar regras entre os modos.</span>';} if(submit)submit.style.display='none'; }
- else { if(eyebrow)eyebrow.textContent='ENGENHARIA DE CONSTRUÇÃO · PE'; if(title)title.textContent='Forja de Itens da Ocultatun'; if(sub)sub.textContent='Chassi + Vetores de Manifestação + Estágio + Categoria.'; if(grid)grid.style.display='grid'; if(msg)msg.style.display='none'; if(submit)submit.style.display=''; }
- populateForgeRecipients(); updateForgeCost(); document.getElementById('forge-modal').style.display='flex';
-}
-function closeForgeWindow(){ document.getElementById('forge-modal').style.display='none'; }
-function populateForgeRecipients(){ const s=document.getElementById('forge-recipient'); s.innerHTML=tablePlayers.filter(p=>!p.isNPC && (getTableGameMode()!=='ocultatun'||(p.mode || ((p.nature||'').includes('Ocultatun')||(p.nature||'').includes('Envolto')||(p.nature||'').includes('Ordem dos Sete')?'ocultatun':'exodo'))==='ocultatun')).map(p=>`<option value="${escHtml(p.id)}">${escHtml(p.name)}</option>`).join(''); if(!s.innerHTML)s.innerHTML='<option value="">Nenhum jogador compatível</option>'; }
-function updateForgeCost(){ const ch=document.getElementById('forge-chassis'); const pe=Number(ch?.selectedOptions[0]?.dataset.pe||0); const vm=[...document.getElementById('forge-vectors')?.selectedOptions||[]].length*5; const es=Math.min(10,Math.max(1,Number(document.getElementById('forge-stage')?.value||1))); const cat=document.getElementById('forge-category')?.value; const total=pe+vm+(es*2)+(cat==='Ritualístico'?-5:0); const preview=document.getElementById('forge-preview'); if(preview)preview.innerHTML=`<b>Custo estimado: ${total} PE</b><span>Chassi ${pe} + ${vm} PE em VM + ${es*2} PE em ES ${es} ${cat==='Ritualístico'?'− 5 PE ritualísticos':''}</span>`; }
-function forgeItemForTable(){ if(!isVttGM)return; if(getTableGameMode()!=='ocultatun')return alert('A forja técnica Chassi + VM + ES desta janela pertence ao sistema de equipamentos da Ocultatun. Para Êxodo, registre o dispositivo na ficha sem importar PE/ES.'); const name=document.getElementById('forge-name').value.trim(), recipientId=document.getElementById('forge-recipient').value, target=getVttCharById(recipientId); if(!name||!target)return alert('Defina nome e destinatário.'); const chassis=document.getElementById('forge-chassis').value, category=document.getElementById('forge-category').value, stage=Math.min(10,Math.max(1,Number(document.getElementById('forge-stage').value||1))), vectors=[...document.getElementById('forge-vectors').selectedOptions].map(o=>o.value), base={Ligeiro:2,Padrão:5,Massivo:8,Proteção:4,Utilitário:3}[chassis], pe=base+vectors.length*5+stage*2+(category==='Ritualístico'?-5:0), charges=10+(Number(target.stats?.vig)||0)-stage, item=normalizeEquipment({name,category,chassis,stage,pe,charges,vectors,effect:document.getElementById('forge-effect').value.trim(),source:'Forja da Mesa'}); target.equipment=Array.isArray(target.equipment)?target.equipment:[]; target.equipment.push(item); syncVttCharacterToOwner(target); currentTableData=currentTableData||{}; currentTableData.forgedItems=Array.isArray(currentTableData.forgedItems)?currentTableData.forgedItems:[]; currentTableData.forgedItems.push(item); renderVttCards(); renderVttEquipment(); closeForgeWindow(); alert(`${name} foi forjado e entregue a ${target.name}.`); }
 
 // ---------------------------------------------------------------------
 // VTT - VIRTUAL TABLETOP LOGIC (JANELAS E MESAS)
@@ -1728,8 +1590,8 @@ function enterVTT(tableIdOrCode, asGM, draftName = null) {
         }
         
         // Mock players
-        tablePlayers.push({ id: 1, name: 'Jogador (Teste)', nature: 'Nexo Padrão', className: 'Combatente', resources: {PV: 15}, equipment: [], isMe: false });
-        tablePlayers.push({ id: 2, name: 'Goblin Abissal', nature: 'Agente Designado (Ocultatun)', className: 'NPC', resources: {PV: 20}, equipment: [], isMe: false, isNPC: true });
+        tablePlayers.push({ id: 1, name: 'Jogador (Teste)', nature: 'Nexo Padrão', className: 'Combatente', resources: {PV: 15}, isMe: false });
+        tablePlayers.push({ id: 2, name: 'Goblin Abissal', nature: 'Agente Designado (Ocultatun)', className: 'NPC', resources: {PV: 20}, isMe: false, isNPC: true });
     } else {
         document.getElementById('btn-save-table').style.display = 'none';
         const jTable = joinedTables.find(t => t.code === tableIdOrCode);
@@ -1737,7 +1599,6 @@ function enterVTT(tableIdOrCode, asGM, draftName = null) {
         
         if(myVttCharIndex !== -1 && characters[myVttCharIndex]) {
             let myChar = JSON.parse(JSON.stringify(characters[myVttCharIndex]));
-            myChar.equipment = Array.isArray(myChar.equipment) ? myChar.equipment : [];
             myChar.isMe = true;
             tablePlayers.push(myChar);
         }
@@ -1850,8 +1711,7 @@ function setupDraggables() {
     makeDraggable(document.getElementById('vtt-grid-window'), document.getElementById('grid-window-header'), false);
     makeDraggable(document.getElementById('vtt-gallery-window'), document.getElementById('gallery-window-header'), false);
     makeDraggable(document.getElementById('vtt-dice-box'), document.getElementById('dice-box-header'), true); 
-    makeDraggable(document.getElementById('vtt-chat-box'), document.getElementById('chat-box-header'), false);
-    makeDraggable(document.getElementById('vtt-equipment-window'), document.getElementById('equipment-window-header'), false); 
+    makeDraggable(document.getElementById('vtt-chat-box'), document.getElementById('chat-box-header'), false); 
 }
 
 function makeDraggable(el, header, requiresGM) {
@@ -2048,7 +1908,6 @@ function renderVttCards() {
                 <h3 style="font-size:0.8rem">${char.name}</h3>
                 <div class="card-hp-bar-container" style="${hpVisibility}"><div class="card-hp-bar" style="width: 100%;"></div></div>
                 <span style="font-size:10px; color:#fff; z-index:2; position:relative; ${hpVisibility}">PV: ${hpVal}/${hpVal}</span>
-                <button type="button" class="vtt-card-eq-btn" onclick="event.stopPropagation(); openCharacterEquipmentFromVtt(${index})">⚙ Arsenal</button>
             </div>`;
             
         wrapper.onclick = () => {
@@ -2790,8 +2649,7 @@ function relockTier(tierIndex, nature) {
     ]
 };
 
-// currentUnlockedNodes já declarado acima; bloco legado preservado sem redeclaração.
-
+let currentUnlockedNodes = [];
 
 function buildSkillTreeUI(nature) {
     const container = document.getElementById('specific-content-container');
