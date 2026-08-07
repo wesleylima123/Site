@@ -232,6 +232,12 @@ function toggleEditUI() {
 
     document.querySelectorAll('.hide-on-view').forEach(el => el.style.display = isEditMode ? '' : 'none');
     
+    // Mantém a Skill Tree do Envolto sincronizada ao alternar entre
+    // visualização e edição.
+    if (currentNature && typeof treeData !== 'undefined' && treeData[currentNature] && typeof renderTree === 'function') {
+        setTimeout(() => renderTree(currentNature), 0);
+    }
+
     if(!isEditMode) {
         document.getElementById('upload-avatar-group').style.display = 'none';
         document.getElementById('upload-gallery-group').style.display = 'none';
@@ -664,7 +670,17 @@ function loadCharacterToBuilder(index, sourceArray = characters, restrictToIdent
     startBuilder(char.mode);
 
     if(char.nature) {
-        selectNature(char.nature);
+        // Reconstrói a árvore ao abrir uma ficha existente.
+        selectNature(char.nature, true);
+        if (char.specificData && char.specificData['tree-unlocked-data']) {
+            const treeField = document.getElementById('tree-unlocked-data');
+            if (treeField) treeField.value = char.specificData['tree-unlocked-data'];
+            const specTreeField = document.getElementById('spec-tree-unlocks');
+            if (specTreeField) specTreeField.value = char.specificData['tree-unlocked-data'];
+            if (typeof renderTree === 'function' && treeData && treeData[char.nature]) {
+                renderTree(char.nature);
+            }
+        }
     }
     if(char.className) {
         selectClass(char.className, true);

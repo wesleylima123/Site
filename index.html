@@ -157,7 +157,7 @@
             </div>
             
             <div class="menu-actions" style="display:flex; flex-wrap:wrap; justify-content:center;">
-                <button class="souls-btn" onclick="initBuilderForSelectedMode()" id="btn-new-char">DESPERTAR NOVA ALMA</button>
+                <button class="souls-btn" onclick="beginNewCharacter()" id="btn-new-char">DESPERTAR NOVA ALMA</button>
                 <input type="file" id="import-json" accept=".json" style="display:none" onchange="importCharacterJSON(event)">
                 <button class="souls-btn" onclick="document.getElementById('import-json').click()" style="border-color:#00ffcc; color:#00ffcc;">IMPORTAR ALMA</button>
             </div>
@@ -233,6 +233,7 @@
                         <div class="form-group" style="margin-top: 30px;">
                             <h3 style="color:var(--theme-color, #d4af37); font-family: 'Cinzel', serif; margin-bottom: 10px; border-bottom: 1px solid #333; padding-bottom: 5px;">I. A Natureza da Alma (Expansão)</h3>
                             <p style="color:#aaa; font-size:0.85rem; margin-bottom:15px;">Escolha a origem do seu poder. Isto define seus recursos e a estética da sua ficha.</p>
+                            <p style="color:#666; font-size:0.75rem; margin-top:-6px;">Repositório pessoal: suas fichas ficam separadas por conta e só aparecem em mesas nas quais foram vinculadas por código.</p>
                             <input type="hidden" id="char-nature" required>
                             <div id="nature-grid" class="choice-grid"></div>
                             <div id="nature-description" class="desc-box" style="display:none; margin-top:15px; font-size:1rem;"></div>
