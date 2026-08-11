@@ -1,10 +1,62 @@
 [
   {
-    "id": "livro-base-mundos-sombrios-ocultatun-ecos1-5-1",
-    "title": "Livro Base — Ocultatun: Ecos 1.5",
-    "mode": "OCULTATUN",
-    "type": "PDF",
-    "file": "codex-files/Livro_Base-Mundos-Sombrios_Ocultatun_Ecos1.5.(1).pdf",
-    "source": "arquivo anexado ao projeto"
+    "id": "livro-base-mundos-sombrios-xodo-assimila-o-1-0",
+    "title": "Livro Base — Êxodo: Assimilação",
+    "name": "Livro base Mundos_Sombrios_Êxodo_Assimilação 1.0.pdf",
+    "mode": "exodo",
+    "kind": "base",
+    "file": "codex-files/Livro base Mundos_Sombrios_Êxodo_Assimilação 1.0.pdf",
+    "managed": false,
+    "source": "base/expansão"
+  },
+  {
+    "id": "arqu-tipo-nico-aprimorador",
+    "title": "Arquiteto de Linhagem — Aprimorador",
+    "name": "🧬 ARQUÉTIPO ÚNICO- (APRIMORADOR).pdf",
+    "mode": "exodo",
+    "kind": "expansao",
+    "file": "codex-files/🧬 ARQUÉTIPO ÚNICO- (APRIMORADOR).pdf",
+    "managed": false,
+    "source": "base/expansão"
+  },
+  {
+    "id": "linhagems-herdadas-xodo-assimila-o",
+    "title": "Linhagens Herdadas — Expansão",
+    "name": "LINHAGEMS_HERDADAS_ Êxodo Assimilação .pdf",
+    "mode": "exodo",
+    "kind": "expansao",
+    "file": "codex-files/LINHAGEMS_HERDADAS_ Êxodo Assimilação .pdf",
+    "managed": false,
+    "source": "base/expansão"
+  },
+  {
+    "id": "arqu-tipo-unico-projeto-player-xodo-assimila-o",
+    "title": "Projeto Player — Expansão",
+    "name": "Arquétipo_Unico-Projeto Player_Êxodo-Assimilação .pdf",
+    "mode": "exodo",
+    "kind": "expansao",
+    "file": "codex-files/Arquétipo_Unico-Projeto Player_Êxodo-Assimilação .pdf",
+    "managed": false,
+    "source": "base/expansão"
+  },
+  {
+    "id": "livro-base-mundos-sombrios-ocultatun-ecos1-5",
+    "title": "Livro Base — Ocultatun: Ecos da Decadência",
+    "name": "Livro_Base-Mundos-Sombrios_Ocultatun_Ecos1.5..pdf",
+    "mode": "ocultatun",
+    "kind": "base",
+    "file": "codex-files/Livro_Base-Mundos-Sombrios_Ocultatun_Ecos1.5..pdf",
+    "managed": false,
+    "source": "base/expansão"
+  },
+  {
+    "id": "a-corrup-o-antol-gica-o-envolto",
+    "title": "O Envolto — Expansão",
+    "name": "A corrupção antológica O Envolto .pdf",
+    "mode": "ocultatun",
+    "kind": "expansao",
+    "file": "codex-files/A corrupção antológica O Envolto .pdf",
+    "managed": false,
+    "source": "base/expansão"
   }
 ]

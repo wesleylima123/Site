@@ -102,46 +102,76 @@
             </div>
         </section>
 
-        <!-- TELA 0.5: CÓDICE DOS MUNDOS — BIBLIOTECA PÚBLICA -->
+        
+        <!-- TELA 0.5: CÓDICE DOS MUNDOS -->
         <section id="screen-codex" class="screen codex-screen">
             <button class="back-btn" onclick="showScreen('screen-mode-select')">&#8592; Retornar à Encruzilhada</button>
-            <div class="souls-header">
+
+            <div class="souls-header codex-hero">
+                <span class="codex-kicker">BIBLIOTECA CENTRAL DO CENÁRIO</span>
                 <h2>Códice dos Mundos</h2>
-                <p>Biblioteca comum do cenário. Mestres e jogadores podem consultar os arquivos disponibilizados pelo ADM.</p>
+                <p>Escolha a biblioteca do modo de jogo. Cada acervo reúne o livro base e suas expansões, com leitura integrada dentro do site.</p>
             </div>
 
-            <div class="codex-library-shell">
-                <div class="codex-library-toolbar">
-                    <div>
-                        <span class="codex-library-kicker">ARQUIVO COMUM</span>
-                        <h3>Biblioteca dos Mundos</h3>
-                        <p>Os arquivos abaixo ficam disponíveis para todos os usuários desta instalação.</p>
+            <div id="codex-home" class="codex-home-grid">
+                <button class="codex-library-pick codex-pick-exodo" onclick="openCodexMode('exodo')">
+                    <span class="codex-pick-tag">ÊXODO</span>
+                    <strong>Biblioteca de Êxodo</strong>
+                    <small>Ficção científica, Gene Êxodo, CÊ, Linhagens Herdadas e Projeto Player.</small>
+                </button>
+                <button class="codex-library-pick codex-pick-ocultatun" onclick="openCodexMode('ocultatun')">
+                    <span class="codex-pick-tag">OCULTATUN</span>
+                    <strong>Biblioteca de Ocultatun</strong>
+                    <small>Horror paranormal, EP, Decadência, Envolto e contensão do Abismo.</small>
+                </button>
+            </div>
+
+            <div id="codex-library-view" class="codex-library-view" style="display:none;">
+                <div class="codex-library-shell">
+                    <div class="codex-library-toolbar">
+                        <div class="codex-library-titlewrap">
+                            <button class="souls-btn small-btn codex-back-home" onclick="closeCodexMode()">← VOLTAR AO CÓDICE</button>
+                            <div>
+                                <span id="codex-library-kicker" class="codex-library-kicker">BIBLIOTECA</span>
+                                <h3 id="codex-library-title">Biblioteca</h3>
+                                <p id="codex-library-subtitle">Acervo temático do modo selecionado.</p>
+                            </div>
+                        </div>
+                        <div id="codex-admin-tools" class="codex-admin-tools" style="display:none;">
+                            <label class="souls-btn small-btn codex-upload-btn" for="codex-file-upload">＋ ADICIONAR ARQUIVO</label>
+                            <input id="codex-file-upload" type="file" multiple hidden onchange="adminUploadCodexFiles(this.files)">
+                        </div>
                     </div>
-                    <div id="codex-admin-tools" class="codex-admin-tools" style="display:none;">
-                        <label class="souls-btn small-btn codex-upload-btn" for="codex-file-upload">＋ ADICIONAR ARQUIVO</label>
-                        <input id="codex-file-upload" type="file" multiple hidden onchange="adminUploadCodexFiles(this.files)">
+
+                    <div class="codex-access-note">
+                        <span>◈</span>
+                        <div>
+                            <strong>Permissões do Códice</strong><br>
+                            <b>Jogador e Mestre:</b> leitura e consulta. <b>ADM:</b> adicionar e excluir arquivos para todos.
+                        </div>
+                    </div>
+
+                    <div class="codex-library-body">
+                        <div id="codex-file-library" class="codex-file-library"></div>
+                        <aside id="codex-mode-summary" class="codex-mode-summary"></aside>
                     </div>
                 </div>
+            </div>
 
-                <div class="codex-access-note">
-                    <span>◈</span>
-                    <div><strong>Permissões do Códice</strong><br>
-                    <b>Jogador e Mestre:</b> leitura e consulta. <b>ADM:</b> adicionar e excluir arquivos para todos.</div>
-                </div>
-
-                <div id="codex-file-library" class="codex-file-library"></div>
-
-                <div class="codex-rule-reference">
-                    <div class="codex-mode-tabs">
-                        <button id="codex-tab-exodo" class="souls-btn small-btn active" onclick="renderCodex('exodo')">ÊXODO: ASSIMILAÇÃO</button>
-                        <button id="codex-tab-ocultatun" class="souls-btn small-btn" onclick="renderCodex('ocultatun')">OCULTATUN</button>
+            <div id="codex-reader-modal" class="codex-reader-modal" style="display:none;">
+                <div class="codex-reader-card">
+                    <div class="codex-reader-topbar">
+                        <div>
+                            <span id="codex-reader-kicker">LEITOR DO CÓDICE</span>
+                            <h3 id="codex-reader-title">Arquivo</h3>
+                        </div>
+                        <button class="souls-btn small-btn" onclick="closeCodexReader()">Fechar</button>
                     </div>
-                    <div id="codex-content" class="codex-content"></div>
+                    <iframe id="codex-reader-frame" title="Leitor do Códice"></iframe>
                 </div>
             </div>
         </section>
-
-        <!-- TELA 1: SANTUÁRIO DAS ALMAS (PRIVADO) -->
+<!-- TELA 1: SANTUÁRIO DAS ALMAS (PRIVADO) -->
         <section id="screen-char-select" class="screen">
             <button class="back-btn" onclick="showScreen('screen-mode-select')">&#8592; Voltar à Encruzilhada</button>
             <div class="souls-header">
@@ -218,6 +248,8 @@
                     <button class="tab-btn" id="btn-tab-stats" onclick="openTab('tab-stats')">Atributos & Recursos</button>
                     <button class="tab-btn" id="btn-tab-skills" onclick="openTab('tab-skills')">Perícias & Talentos</button>
                     <button class="tab-btn" id="btn-tab-powers" onclick="openTab('tab-powers')">Poderes / Potências</button>
+                    <button class="tab-btn" id="btn-tab-alquerino" style="display:none" onclick="openTab('tab-alquerino')">⚗ Laboratório Alquímico</button>
+                    <button class="tab-btn" id="btn-tab-rituals" style="display:none" onclick="openTab('tab-rituals')">◈ Códice Hermético</button>
                     <button class="tab-btn" id="btn-tab-equipment" onclick="openTab('tab-equipment')">⚙️ Dispositivos & Equipamentos</button>
                 </div>
 
@@ -327,11 +359,169 @@
                         <div class="dynamic-list" id="powers-list"></div>
                     </div>
                     
+                    <div id="tab-alquerino" class="tab-content alquerino-lab-tab" style="display:none">
+    <div class="alquimia-laboratorio">
+        <header class="alchemy-header">
+            <div class="lab-retort" aria-hidden="true">
+                <div class="retort-neck"></div><div class="retort-bulb"><span>☿</span></div>
+                <div class="retort-liquid"></div>
+            </div>
+            <div class="alchemy-heading">
+                <span class="eyebrow">OCULTATUN · ALQUERINO · ALQUIMIA INTRÍNSECA</span>
+                <h3>Laboratório de Síntese</h3>
+                <p>Uma bancada de vidro vivo para preparar poções, decifrar fórmulas, combinar ingredientes e construir Caminhos. O laboratório separa o que é cânone do livro-base do que nasce na mesa.</p>
+            </div>
+            <div class="alchemy-stat-panel">
+                <span>Preparos / descanso <b id="alquerino-prep-capacity">0</b></span>
+                <span>ES máxima <b id="alquerino-es-total">0</b></span>
+                <span>Fadiga Alquímica <b id="alquerino-fadiga-total">0</b></span>
+            </div>
+        </header>
+
+        <div class="alchemy-lab-nav" role="tablist" aria-label="Laboratório do Alquerino">
+            <button type="button" class="alchemy-nav-btn active" data-alchemy-panel="bench" onclick="switchAlchemyPanel('bench')">⚗ BANCADA</button>
+            <button type="button" class="alchemy-nav-btn" data-alchemy-panel="paths" onclick="switchAlchemyPanel('paths')">✦ CAMINHOS OFICIAIS</button>
+            <button type="button" class="alchemy-nav-btn" data-alchemy-panel="formulas" onclick="switchAlchemyPanel('formulas')">⌬ FÓRMULAS</button>
+            <button type="button" class="alchemy-nav-btn" data-alchemy-panel="ingredients" onclick="switchAlchemyPanel('ingredients')">◈ INGREDIENTES</button>
+            <button type="button" class="alchemy-nav-btn" data-alchemy-panel="forge" onclick="switchAlchemyPanel('forge')">✧ NOVO CAMINHO</button>
+        </div>
+
+        <section id="alchemy-panel-bench" class="alchemy-panel active">
+            <div class="alchemy-bench-grid">
+                <section class="glass-card alchemy-bench-console">
+                    <div class="glass-card-title"><span>⌬</span> Preparação da Bancada</div>
+                    <div class="alchemy-fields-grid">
+                        <div class="form-group"><label>Patamar do Alquerino</label><select id="spec-alquerino-patamar" onchange="renderAlquerinoLab()"><option value="1">I · Recruta</option><option value="2">II · Operador</option><option value="3">III · Elite</option><option value="4">IV · Mestre</option></select></div>
+                        <div class="form-group"><label>Grau em Ocultismo</label><input type="number" id="spec-alquerino-ocultismo-grau" value="0" min="0" max="5" onchange="renderAlquerinoLab()"></div>
+                        <div class="form-group"><label>Fórmulas conhecidas</label><input type="number" id="spec-alquerino-formulas-known" value="0" min="0" max="999" onchange="renderAlquerinoLab()"></div>
+                        <div class="form-group"><label>Filtro de raridade</label><select id="alchemy-rarity-filter" onchange="renderAlchemyIngredients()"><option value="all">Todas as raridades</option><option value="R1">R1 · Comum</option><option value="R2">R2 · Incomum</option><option value="R3">R3 · Anômalo</option><option value="R4">R4 · Raro</option><option value="R5">R5 · Singular</option><option value="R6">R6 · Conceitual</option><option value="R7">R7 · Divino</option></select></div>
+                    </div>
+                    <div class="alchemy-rule-ledger">
+                        <div><b>Preparo Livre</b><span>Use uma Fórmula conhecida e combine Poderes, Forma, Função, Capacidade e Estabilidade.</span></div>
+                        <div><b>Preparo de Caminho</b><span>Cada receita canônica usa três ingredientes. A combinação correta desbloqueia a etapa.</span></div>
+                        <div><b>CD de Síntese</b><span>10 + maior Capacidade utilizada; duas ou mais Potências de Cap. 6+ recebem +2 CD.</span></div>
+                    </div>
+                </section>
+
+                <section class="glass-card synthesis-vessel-card">
+                    <div class="glass-card-title"><span>⚗</span> Câmara de Combinação</div>
+                    <div class="vessel-stage">
+                        <div class="reagent-flask" data-slot="0"><span class="flask-index">A</span><div class="flask-bulb"><b>+</b><small>vazio</small></div></div>
+                        <div class="vessel-arrow">+</div>
+                        <div class="reagent-flask" data-slot="1"><span class="flask-index">B</span><div class="flask-bulb"><b>+</b><small>vazio</small></div></div>
+                        <div class="vessel-arrow">+</div>
+                        <div class="reagent-flask" data-slot="2"><span class="flask-index">C</span><div class="flask-bulb"><b>+</b><small>vazio</small></div></div>
+                    </div>
+                    <div id="alchemy-combination-status" class="alchemy-combination-status">Selecione até 3 ingredientes abaixo. O laboratório procura fórmulas oficiais que coincidam exatamente.</div>
+                    <div class="alchemy-combine-actions">
+                        <label class="alchemy-consume-toggle"><input type="checkbox" id="alchemy-consume-reagents" checked> Consumir 1 de cada reagente ao sintetizar</label>
+                        <button type="button" class="souls-btn small-btn" onclick="clearAlchemyCombination()">LIMPAR VIDRARIA</button>
+                        <button type="button" class="souls-btn small-btn" onclick="combineAlchemyIngredients()">⚗ SINTETIZAR</button>
+                    </div>
+                    <div id="alchemy-unlocked-formula" class="formula-result-card"></div>
+                </section>
+            </div>
+
+            <div class="alchemy-two-column">
+                <section class="glass-card">
+                    <div class="glass-card-title"><span>◈</span> Ingredientes na bancada</div>
+                    <input id="alchemy-ingredient-search" class="alchemy-search" type="search" placeholder="Pesquisar ingrediente..." oninput="renderAlchemyIngredients()">
+                    <div id="alchemy-ingredient-grid" class="ingredient-grid"></div>
+                </section>
+                <section class="glass-card">
+                    <div class="glass-card-title"><span>⌁</span> Fórmula Livre · Poção Menor</div>
+                    <div class="alchemy-free-form-grid">
+                        <div class="form-group"><label>Nome da fórmula</label><input id="alchemy-free-name" placeholder="Ex.: Elixir da Vigília Fraturada"></div>
+                        <div class="form-group"><label>Tipo</label><select id="alchemy-free-type"><option>Poção</option><option>Bomba</option><option>Remédio</option><option>Veneno</option><option>Gás</option><option>Injetável</option><option>Solução</option></select></div>
+                        <div class="form-group"><label>Forma</label><select id="alchemy-free-form"><option>Líquido</option><option>Pó</option><option>Gás</option><option>Cristal</option><option>Metal</option><option>Fluido</option><option>Tecido</option><option>Luz condensada</option></select></div>
+                        <div class="form-group"><label>Capacidade</label><input id="alchemy-free-cap" type="number" min="1" max="10" value="2"></div>
+                        <div class="form-group"><label>Complexidade</label><select id="alchemy-free-complexity"><option value="0">Matéria comum · +0</option><option value="2">Matéria anômala · +2</option><option value="3">Propriedade física · +3</option><option value="4">Emoção/estado mental · +4</option><option value="5">Memória · +5</option><option value="6">Conceito · +6</option><option value="8">Conceito existencial · +8</option><option value="10">Conceito divino · +10</option></select></div>
+                        <div class="form-group"><label>Função</label><input id="alchemy-free-function" placeholder="O que a substância faz"></div>
+                        <div class="form-group full"><label>Estabilidade / duração</label><input id="alchemy-free-stability" placeholder="Ex.: 1 cena, 1 hora, até ser acionado..."></div>
+                    </div>
+                    <div class="alchemy-free-meta"><span>Reagentes usados: <b id="alchemy-free-reagent-count">0/3</b></span><span>CD estimada: <b id="alchemy-free-cd">12</b></span></div>
+                    <button type="button" class="souls-btn small-btn full-btn" onclick="saveFreeAlchemyFormula()">✧ GRAVAR FÓRMULA NA BIBLIOTECA</button>
+                </section>
+            </div>
+
+            <section class="glass-card formula-rack-card">
+                <div class="glass-card-title"><span>♜</span> Frascos já sintetizados nesta ficha</div>
+                <div id="alquerino-preparos-list" class="alchemy-prep-rack"></div>
+            </section>
+        </section>
+
+        <section id="alchemy-panel-paths" class="alchemy-panel">
+            <div class="panel-intro"><div><span class="eyebrow">CÂNON OCULTATON · CAPÍTULO IX</span><h4>Caminhos da Ordem Celestial</h4><p>Os três Caminhos documentados para o Alquerino são o Profeta, o Penitente e o Arcanjo. Cada etapa possui Capacidade, CD, efeito e uma fórmula de três ingredientes.</p></div><div class="path-legend"><span>R2–R7</span><small>Raridade dos ingredientes</small></div></div>
+            <div id="alquerino-official-paths" class="official-path-grid"></div>
+            <section class="glass-card hidden-path-card"><div class="glass-card-title"><span>☾</span> Caminhos Ocultos documentados</div><p class="alchemy-warning">O livro-base inicia o Caminho Oculto pelo Enforcado e apresenta as três primeiras etapas do conjunto. O restante não está desenvolvido no material analisado; por isso o site não inventa etapas ausentes.</p><div id="alquerino-hidden-paths"></div></section>
+        </section>
+
+        <section id="alchemy-panel-formulas" class="alchemy-panel">
+            <div class="panel-intro"><div><span class="eyebrow">CÓDICE DE FÓRMULAS</span><h4>Biblioteca Completa</h4><p>Pesquise e abra qualquer fórmula documentada. As fórmulas oficiais mostram exatamente os três reagentes necessários para a combinação.</p></div></div>
+            <div class="formula-toolbar"><input id="alchemy-formula-search" class="alchemy-search" type="search" placeholder="Buscar fórmula, Caminho, ingrediente ou efeito..." oninput="renderAlchemyFormulaLibrary()"><select id="alchemy-formula-filter" onchange="renderAlchemyFormulaLibrary()"><option value="all">Todas</option><option value="official">Oficiais</option><option value="hidden">Ocultas documentadas</option><option value="custom">Criadas na mesa</option></select></div>
+            <div id="alchemy-formula-library" class="formula-library-grid"></div>
+        </section>
+
+        <section id="alchemy-panel-ingredients" class="alchemy-panel">
+            <div class="panel-intro"><div><span class="eyebrow">CÂPÍTULO VIII · INGREDIENTES</span><h4>Almoxarifado de Reagentes</h4><p>Todos os ingredientes nomeados nas fórmulas de Caminho verificadas no livro-base, além dos reagentes explicitamente exemplificados na descrição da Alquimia Intrínseca. Ingredientes sem raridade atribuída pela fonte ficam marcados como “Mencionado”.</p></div></div>
+            <div class="ingredient-library-toolbar"><input id="alchemy-ingredient-library-search" class="alchemy-search" type="search" placeholder="Buscar ingrediente..." oninput="renderAlchemyIngredientLibrary()"><select id="alchemy-ingredient-library-filter" onchange="renderAlchemyIngredientLibrary()"><option value="all">Todas as raridades</option><option value="R1">R1</option><option value="R2">R2</option><option value="R3">R3</option><option value="R4">R4</option><option value="R5">R5</option><option value="R6">R6</option><option value="R7">R7</option></select></div>
+            <div id="alchemy-ingredient-library" class="ingredient-library-grid"></div>
+        </section>
+
+        <section id="alchemy-panel-forge" class="alchemy-panel">
+            <div class="panel-intro"><div><span class="eyebrow">LABORATÓRIO ABERTO</span><h4>Forjar um Caminho Novo</h4><p>Esta área é deliberadamente livre. O Mestre pode criar Caminhos novos sem alterar o conteúdo canônico. Cada etapa pode receber uma fórmula própria de três ingredientes.</p></div></div>
+            <div class="alchemy-new-path-grid">
+                <section class="glass-card">
+                    <div class="glass-card-title"><span>✧</span> Identidade do Caminho</div>
+                    <div class="form-group"><label>Nome do Caminho</label><input id="alchemy-new-path-name" placeholder="Ex.: Caminho do Vidro Negro"></div>
+                    <div class="form-group"><label>Filosofia</label><textarea id="alchemy-new-path-philosophy" rows="4" placeholder="O princípio que orienta o Caminho..."></textarea></div>
+                    <div class="form-group"><label>Etapa</label><select id="alchemy-new-path-seq"><option value="1">I · Despertar</option><option value="2">II · Assimilação</option><option value="3">III · Transfiguração</option><option value="4">IV · Ascensão</option><option value="5">V · Conceito</option><option value="6">VI · Arquétipo</option><option value="7">VII · Apoteose</option></select></div>
+                    <div class="alchemy-new-path-grid2"><div class="form-group"><label>Capacidade</label><input id="alchemy-new-path-cap" type="number" min="1" max="10" value="2"></div><div class="form-group"><label>CD</label><input id="alchemy-new-path-cd" type="number" min="1" max="50" value="13"></div></div>
+                    <div class="form-group"><label>Nome da habilidade</label><input id="alchemy-new-path-ability" placeholder="Ex.: Vidro Respirante"></div>
+                    <div class="form-group"><label>Efeito</label><textarea id="alchemy-new-path-effect" rows="5" placeholder="Descreva o efeito mecânico e narrativo..."></textarea></div>
+                    <button type="button" class="souls-btn small-btn full-btn" onclick="saveNewAlchemyPathNode()">✧ GRAVAR ETAPA</button>
+                </section>
+                <section class="glass-card">
+                    <div class="glass-card-title"><span>⚗</span> Reagentes da nova etapa</div>
+                    <p class="alchemy-warning">Selecione três ingredientes na bancada de combinação antes de gravar a etapa. Isso cria a fórmula do novo Caminho.</p>
+                    <div id="alchemy-new-path-reagents" class="selected-reagent-stack"></div>
+                    <div class="custom-path-list-title">Caminhos criados nesta ficha</div>
+                    <div id="alchemy-custom-path-list" class="custom-path-list"></div>
+                </section>
+            </div>
+        </section>
+    </div>
+</div>
+
+                    <div id="tab-rituals" class="tab-content ritual-codex-tab" style="display:none">
+                        <div class="ritual-codex-head">
+                            <div>
+                                <span class="eyebrow">OCULTATUN · HERMÉTICO · CÓDICE DE SIMETRIA</span>
+                                <h3>Grimório de Campo</h3>
+                                <p>Os 33 rituais numerados do Códice podem ser conhecidos e sintonizados. A seleção é persistida junto da ficha.</p>
+                            </div>
+                            <div class="ritual-counter-row">
+                                <span>Conhecidos <b id="hermetic-known-count">0/0</b></span>
+                                <span>Sintonizados <b id="hermetic-sync-count">0/0</b></span>
+                            </div>
+                        </div>
+                        <div class="ritual-toolbar hide-on-view">
+                            <input id="hermetic-ritual-search" type="search" placeholder="Buscar por nome, material, gesto, palavra ou efeito..." oninput="renderHermeticRituals()">
+                            <select id="hermetic-ritual-filter" onchange="renderHermeticRituals()">
+                                <option value="all">Todos os rituais</option>
+                                <option value="known">Conhecidos</option>
+                                <option value="synchronized">Sintonizados</option>
+                                <option value="available">Ainda não selecionados</option>
+                            </select>
+                        </div>
+                        <div id="hermetic-ritual-grid" class="ritual-grid"></div>
+                    </div>
+
                     <div id="tab-equipment" class="tab-content">
                         <div class="equipment-sheet-panel">
                             <div class="equipment-sheet-head">
                                 <div><span class="eyebrow" id="equipment-sheet-eyebrow">ARSENAL</span><h3 id="equipment-sheet-title">Dispositivos & Equipamentos</h3><p id="equipment-sheet-subtitle">A estrutura desta janela acompanha o modo de jogo e a natureza da ficha.</p></div>
-                                <button type="button" class="souls-btn small-btn hide-on-view" onclick="openEquipmentAddModal()">+ ADICIONAR ITEM</button>
+                                <div class="equipment-head-actions hide-on-view"><button type="button" class="souls-btn small-btn" onclick="openEquipmentAddModal()">+ ADICIONAR ITEM</button><button type="button" class="souls-btn small-btn" id="btn-forge-sheet-item" onclick="openForgeForCurrentSheet()">⚒ FORJAR ITEM</button></div>
                             </div>
                             <div id="equipment-sheet-profile" class="equipment-sheet-profile"></div><div id="equipment-sheet-list" class="equipment-sheet-list"></div>
                         </div>
@@ -596,7 +786,20 @@
                     <div class="form-group"><label>Chassi</label><select id="forge-chassis" onchange="updateForgeCost()"><option value="Ligeiro" data-pe="2">Ligeiro — 2 PE</option><option value="Padrão" data-pe="5">Padrão — 5 PE</option><option value="Massivo" data-pe="8">Massivo — 8 PE</option><option value="Proteção" data-pe="4">Proteção — 4 PE</option><option value="Utilitário" data-pe="3">Utilitário — 3 PE</option></select></div>
                     <div class="form-group"><label>Categoria</label><select id="forge-category" onchange="updateForgeCost()"><option value="Ritualístico">Ritualístico — -5 PE</option><option value="Anômalo">Anômalo — custo integral</option></select></div>
                     <div class="form-group"><label>Estágio (1–10)</label><input id="forge-stage" type="number" min="1" max="10" value="1" onchange="updateForgeCost()"></div>
-                    <div class="form-group"><label>Vetores de Manifestação</label><select id="forge-vectors" multiple size="5" onchange="updateForgeCost()"><option value="Destrutiva">Destrutiva</option><option value="Fissura">Fissura</option><option value="Manipulação">Manipulação</option><option value="Protetiva">Protetiva</option><option value="Restauração">Restauração</option></select><small>5 PE por VM. Segure Ctrl/toque para múltiplas seleções.</small></div>
+                    <div class="form-group"><label>Vetores de Manifestação</label><select id="forge-vectors" multiple size="5" onchange="updateForgeCost()"><option value="Destrutiva">Destrutiva</option><option value="Fissura">Fissura</option><option value="Manipulação">Manipulação</option><option value="Protetiva">Protetiva</option><option value="Restauração">Restauração</option></select><small>O custo de cada vetor é definido pelo sistema selecionado.</small></div>
+                    <div id="forge-exodo-fields" class="forge-special-fields" style="display:none">
+                        <div class="form-group"><label>MCP · Graduação de Multiataques</label><input id="forge-mcp-multi" type="number" min="0" max="10" value="0" oninput="updateForgeCost()"><small>Fórmula oficial: max(10, 3 × Multi) + 2 × Efeito.</small></div>
+                        <div class="form-group"><label>MCP · Graduação do Efeito</label><input id="forge-mcp-effect" type="number" min="0" max="10" value="0" oninput="updateForgeCost()"></div>
+                        <div class="form-group"><label>PE Extras / customizações</label><input id="forge-extras" type="number" min="0" value="0" oninput="updateForgeCost()"></div>
+                    </div>
+                    <div id="forge-envolto-fields" class="forge-special-fields" style="display:none">
+                        <div class="form-group"><label>Resíduo Ontológico</label><select id="forge-residue" onchange="updateForgeCost()"><option value="">Nenhum — 0 PE</option><option value="Carne Estática" data-pe="4">Carne Estática — 4 PE</option><option value="Escória Euclidiana" data-pe="6">Escória Euclidiana — 6 PE</option><option value="Pulmão Cego" data-pe="5">Pulmão Cego — 5 PE</option></select></div>
+                        <div class="form-group"><label>Válvula de Potência</label><select id="forge-valve" onchange="updateForgeCost()"><option value="0">Sem válvula — 0 PE</option><option value="1">Tier 1 · Capacidades 1–3 — 6 PE</option><option value="2">Tier 2 · Capacidades 4–6 — 12 PE</option></select></div>
+                        <div class="form-group"><label>Gatilho de Falha / Maldição (-5 PE)</label><select id="forge-curse" onchange="updateForgeCost()"><option value="">Nenhum — 0 PE</option><option value="A Fome de Carne">A Fome de Carne — 1 ou 2 natural: morde o usuário, 1d8 dano</option><option value="O Dreno do Vazio">O Dreno do Vazio — se guardado sem tirar uma vida: drena 5 EE</option><option value="A Traição da Estática">A Traição da Estática — falha crítica avaria organicamente e exige 1 Ação Padrão para realinhar</option></select><small>Qualquer maldição reduz o custo final em 5 PE.</small></div>
+                    </div>
+                    <div id="forge-ordem-fields" class="forge-special-fields" style="display:none">
+                        <div class="form-group"><label>Propósito Sagrado</label><input id="forge-purpose" placeholder="Ex.: Purificar, Proteger o Portador, Ferir apenas o mal" oninput="updateForgeCost()"><small>Uma Dádiva exige Propósito; Recordação mínima de 25% e teste de Forja.</small></div>
+                    </div>
                     <div class="form-group"><label>Destino</label><select id="forge-recipient"></select></div>
                     <div class="forge-preview" id="forge-preview">Custo estimado: 0 PE</div>
                     <div class="form-group forge-notes"><label>Efeito / VF / observações</label><textarea id="forge-effect" rows="4" placeholder="Descreva o efeito mundano, VF e particularidades."></textarea></div>
@@ -680,7 +883,9 @@
 
     <script src="js/codex.js"></script>
     <script>window.CODEX_FILE_CATALOG=[{"id": "livro-base-mundos-sombrios-ocultatun-ecos1-5-1", "title": "Livro Base — Ocultatun: Ecos 1.5", "mode": "OCULTATUN", "type": "PDF", "file": "codex-files/Livro_Base-Mundos-Sombrios_Ocultatun_Ecos1.5.(1).pdf", "source": "arquivo anexado ao projeto"}];</script>\n    <script src="js/codex-library.js"></script>
-    <script src="js/script.js"></script>
+    <script src="js/hermetico-rituais.js"></script>
+<script src="js/script.js"></script>
     <script src="js/linhagem-tree.js"></script>
+    <script src="js/mundos-updates.js"></script>
 </body>
 </html>

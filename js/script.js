@@ -29,6 +29,47 @@ if (usersDB.length === 0) {
 }
 
 let currentUser = null;
+const CURRENT_USER_SESSION_KEY = 'mundosSombriosCurrentUserId';
+
+function saveCurrentUserSession() {
+    if (currentUser && currentUser.id) {
+        localStorage.setItem(CURRENT_USER_SESSION_KEY, currentUser.id);
+    } else {
+        localStorage.removeItem(CURRENT_USER_SESSION_KEY);
+    }
+}
+
+function restoreCurrentUserSession() {
+    const userId = localStorage.getItem(CURRENT_USER_SESSION_KEY);
+    if (!userId) return false;
+
+    const account = usersDB.find(u => u.id === userId);
+    if (!account) {
+        localStorage.removeItem(CURRENT_USER_SESSION_KEY);
+        return false;
+    }
+
+    currentUser = account;
+    document.getElementById('display-username').innerText = currentUser.username;
+
+    const emblem = document.getElementById('master-emblem');
+    if (currentUser.role === 'mestre' || currentUser.role === 'admin') {
+        emblem.style.display = 'block';
+        if (typeof makeDraggable === 'function') makeDraggable(emblem, emblem, false);
+    } else {
+        emblem.style.display = 'none';
+    }
+
+    document.getElementById('btn-admin-panel').style.display = currentUser.role === 'admin' ? 'block' : 'none';
+    document.getElementById('tab-btn-gm').style.display = (currentUser.role === 'mestre' || currentUser.role === 'admin') ? 'inline-block' : 'none';
+
+    loadUserData();
+    if (currentUser.role === 'admin' && typeof renderAdminRequestsWindows === 'function') {
+        renderAdminRequestsWindows();
+    }
+
+    return true;
+}
 
 // ==========================================
 // GAME DATABASE
@@ -107,6 +148,7 @@ function doLogin() {
             renderAdminRequestsWindows();
         }
 
+        saveCurrentUserSession();
         showScreen('screen-mode-select');
     } else {
         alert("Entidade não reconhecida ou senha incorreta no Vazio.");
@@ -116,6 +158,7 @@ function doLogin() {
 function doLogout() {
     if(confirm("Deseja desconectar do Vazio?")) {
         currentUser = null;
+        saveCurrentUserSession();
         document.getElementById('master-emblem').style.display = 'none';
         document.getElementById('admin-requests-container').innerHTML = '';
         showScreen('screen-login');
@@ -1189,6 +1232,10 @@ document.addEventListener('DOMContentLoaded', () => {
             fsZoom = Math.min(Math.max(0.5, fsZoom), 5);
             document.getElementById('fs-img').style.transform = `scale(${fsZoom})`;
         });
+    }
+
+    if (restoreCurrentUserSession()) {
+        showScreen('screen-mode-select');
     }
 });
 
@@ -2304,30 +2351,67 @@ let currentUnlockedNodes = [];
 
 function buildSkillTreeUI(nature) {
     const container = document.getElementById('specific-content-container');
-    if (container) {
-        container.classList.toggle('envolto-skilltree', String(nature || '').includes('Envolto'));
-    }
-    
-    if(!tierData[nature]) {
+    if(!advancedTreeData[nature]) {
         const natureData = ruleset[currentMode].natures[nature];
-        if(natureData && natureData.tabHtml) {
-            container.innerHTML = natureData.tabHtml;
-        }
+        if(natureData && natureData.tabHtml) { container.innerHTML = natureData.tabHtml; }
         return;
     }
-    
+
+    const isEnvolto = nature === 'O Envolto (Horror Cósmico)';
+    if(isEnvolto){
+        container.innerHTML = `
+            <section id="ef-space-final" class="ef-space-final" aria-label="Espaço Final do Envolto">
+                <header class="ef-header">
+                    <div class="ef-seal" aria-hidden="true">∅</div>
+                    <div class="ef-heading">
+                        <span class="ef-kicker">OCULTATUN · O ENVOLTO</span>
+                        <h2>ESPAÇO FINAL</h2>
+                        <p>Registro de Potências. Cada ramificação é uma deformação progressiva da casca.</p>
+                    </div>
+                    <div class="ef-progress"><span>DESPERTOS</span><strong id="ef-progress-value">0 / 39</strong></div>
+                </header>
+                <div class="ef-view-controls" role="toolbar" aria-label="Controles de visualização da Skill Tree">
+                    <button type="button" id="ef-fit-tree" class="ef-view-btn">⛶ VER ÁRVORE COMPLETA</button>
+                    <button type="button" id="ef-zoom-out" class="ef-view-btn" aria-label="Diminuir zoom">−</button>
+                    <output id="ef-zoom-value" class="ef-zoom-value">100%</output>
+                    <button type="button" id="ef-zoom-in" class="ef-view-btn" aria-label="Aumentar zoom">+</button>
+                </div>
+                <div class="ef-main">
+                    <div class="ef-tree-frame">
+                        <div class="ef-paper-noise" aria-hidden="true"></div>
+                        <div class="ef-infection" aria-hidden="true"><span></span><i></i><b></b></div>
+                        <div id="tree-scroll-wrapper" class="ef-tree-scroll">
+                            <svg id="tree-svg" class="ef-svg" aria-hidden="true"></svg>
+                            <div id="tree-nodes" class="ef-nodes"></div>
+                        </div>
+                        <div class="ef-frame-note">OS 13 RASGOS DA CASCA · ARRASTE O FUNDO PARA MOVER A ÁRVORE</div>
+                    </div>
+                    <aside class="ef-info">
+                        <div class="ef-info-label">ANOTAÇÃO DE CAMPO</div>
+                        <div id="tree-node-info" class="ef-info-body">Selecione uma árvore ou um nodo para revelar custo, efeito e progressão.</div>
+                        <input type="hidden" id="tree-unlocked-data" value="">
+                    </aside>
+                </div>
+            </section>`;
+        setTimeout(() => renderTree(nature), 50);
+        return;
+    }
+
     let html = `
-        <h3 style="color:var(--theme-color); font-family: 'Cinzel', serif; margin-bottom: 10px; text-align:center;">Ramificações Biológicas e Espirituais</h3>
-        <p style="color:#aaa; font-size:0.85rem; text-align:center; margin-bottom:15px;">A evolução cobra seu preço. Desbloqueie os nodos progressivamente.</p>
-        <div class="tree-ui-container envolto-skilltree-window" style="height:350px;">
-            <svg class="tree-svg" id="tree-svg"></svg>
-            <div class="tree-nodes" id="tree-nodes"></div>
+        <h3 style="color:var(--theme-color); font-family: 'Cinzel', serif; margin-bottom: 10px; text-align:center;">Tabelas de Potência e Mutação</h3>
+        <p style="color:#aaa; font-size:0.85rem; text-align:center; margin-bottom:15px;">Selecione os Nodos Iniciais (Tabelas) para visualizar as opções e ramificar suas Habilidades.</p>
+        <div class="tree-ui-container envolto-skilltree-window" style="height:860px; overflow:auto; border:1px solid #333; position:relative; background:rgba(0,0,0,0.6);">
+            <div id="tree-scroll-wrapper" style="position:relative; height:100%; min-width:100%;">
+                <svg class="tree-svg" id="tree-svg" style="position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none;"></svg>
+                <div class="tree-nodes" id="tree-nodes" style="position:absolute; top:0; left:0; width:100%; height:100%;"></div>
+            </div>
         </div>
-        <div id="tree-node-info" class="desc-box" style="margin-top:15px; min-height:100px; text-align:center;">Selecione um ponto na árvore para ver a descrição.</div>
+        <div id="tree-node-info" class="desc-box envolto-table-info" style="margin-top:15px; min-height:150px; text-align:left;">Selecione uma Tabela (Nodo Raiz) para iniciar.</div>
         <input type="hidden" id="tree-unlocked-data" value="">
+        <input type="hidden" id="ef-table-layout-data" value="{}">
+        <input type="hidden" id="ef-tree-layout-version" value="31">
     `;
     container.innerHTML = html;
-    
     setTimeout(() => renderTree(nature), 50);
 }
 
@@ -2828,6 +2912,7 @@ function buildSkillTreeUI(nature) {
         </div>
         <div id="tree-node-info" class="desc-box envolto-table-info" style="margin-top:15px; min-height:150px; text-align:left;">Selecione uma Tabela (Nodo Raiz) para iniciar.</div>
         <input type="hidden" id="tree-unlocked-data" value="">
+        <input type="hidden" id="ef-table-layout-data" value="{}">
     `;
     container.innerHTML = html;
     setTimeout(() => renderTree(nature), 50);
@@ -2911,196 +2996,357 @@ function renderTree(nature) {
 
 
 
-function renderEnvoltoTree(trees, nature, nodesContainer, svgContainer, scrollWrapper) {
-    // Palco fixo da árvore circular do Envolto.
-    // A mecânica permanece intacta; aqui apenas a geometria visual muda.
-    const W = 1600;
-    const H = 1180;
-    const cx = W / 2;
-    const cy = H / 2;
-    const rootRadius = 440;
-    const tierStep = 72;
-    const completionRadius = rootRadius - (4 * tierStep);
+/* =====================================================================
+   ESPAÇO FINAL — MOVIMENTO LIVRE DAS TABELAS DE POTÊNCIA E MUTAÇÃO
+   Cada Tabela/Raiz controla sua própria posição. A ramificação acompanha
+   a Tabela, preservando as conexões orgânicas e a persistência na ficha.
+   ===================================================================== */
+const EF_TABLE_LAYOUT_KEY = 'ef-table-layout-data';
+let envoltoTableDragState = null;
 
-    scrollWrapper.style.width = W + 'px';
-    scrollWrapper.style.minWidth = W + 'px';
-    scrollWrapper.style.height = H + 'px';
-    scrollWrapper.style.minHeight = H + 'px';
+function efReadTableLayout() {
+    const input = document.getElementById(EF_TABLE_LAYOUT_KEY);
+    let raw = input && input.value ? input.value : '';
+    if (!raw && editingIndex !== null && characters[editingIndex]?.specificData?.[EF_TABLE_LAYOUT_KEY]) {
+        raw = characters[editingIndex].specificData[EF_TABLE_LAYOUT_KEY];
+    }
+    try {
+        const parsed = raw ? JSON.parse(raw) : {};
+        return parsed && typeof parsed === 'object' ? parsed : {};
+    } catch (_) { return {}; }
+}
 
-    svgContainer.setAttribute('width', W);
-    svgContainer.setAttribute('height', H);
-    svgContainer.setAttribute('viewBox', `0 0 ${W} ${H}`);
-    svgContainer.style.width = W + 'px';
-    svgContainer.style.height = H + 'px';
+function efWriteTableLayout(layout) {
+    const input = document.getElementById(EF_TABLE_LAYOUT_KEY);
+    if (input) input.value = JSON.stringify(layout);
+}
 
-    nodesContainer.style.width = W + 'px';
-    nodesContainer.style.height = H + 'px';
+function efDefaultTablePosition(index, count, W, H) {
+    const cx = W / 2, cy = H / 2;
+    const radius = Math.min(W, H) * 0.3625;
+    const angle = -Math.PI / 2 + index * (Math.PI * 2 / Math.max(1, count));
+    return { x: cx + Math.cos(angle) * radius, y: cy + Math.sin(angle) * radius };
+}
 
-    const count = trees.length;
-    const palette = trees.map((_, idx) => {
-        const hue = (idx * 27) % 360;
-        return {
-            top: `hsla(${hue}, 88%, ${58 - (idx % 3) * 4}%, .98)`,
-            bottom: `hsla(${hue}, 62%, ${14 + (idx % 4) * 2}%, .98)`,
-            border: `hsla(${hue}, 95%, 72%, .92)`,
-            glow: `hsla(${hue}, 95%, 64%, .36)`,
-            glow2: `hsla(${(hue + 18) % 360}, 90%, 72%, .26)`,
-            line: `hsla(${hue}, 78%, 68%, .78)`,
-            animation1: `envPulse${(idx % 6) + 1} ${5.8 + (idx % 4) * 0.45}s ease-in-out infinite ${idx * 0.08}s`,
-            animation2: `envFlow${(idx % 5) + 1} ${7.5 + (idx % 3) * 0.55}s ease-in-out infinite ${idx * 0.11}s`
+function efClampTablePosition(pos, W, H) {
+    const margin = Math.min(82, Math.round(Math.min(W, H) * 0.11));
+    return {
+        x: Math.max(margin, Math.min(W - margin, Number(pos.x) || W / 2)),
+        y: Math.max(margin, Math.min(H - margin, Number(pos.y) || H / 2))
+    };
+}
+
+function efAttachTableDrag(root, tree, nature, index, count, W, H) {
+    if (!root) return;
+    root.classList.add('ef-table-draggable');
+    root.setAttribute('title', 'Arraste para mover esta Tabela de Potência e Mutação');
+    root.setAttribute('aria-label', `Mover Tabela ${index + 1}: ${tree.name}`);
+
+    root.addEventListener('pointerdown', function (ev) {
+        if (ev.button !== 0) return;
+        const layout = efReadTableLayout();
+        const current = layout[tree.treeId] || efDefaultTablePosition(index, count, W, H);
+        envoltoTableDragState = {
+            treeId: tree.treeId,
+            nature,
+            index,
+            count,
+            W,
+            H,
+            start: { x: ev.clientX, y: ev.clientY },
+            startPos: { x: current.x, y: current.y },
+            moved: false,
+            pointerId: ev.pointerId
         };
+        root.classList.add('ef-table-dragging');
+        try { root.setPointerCapture(ev.pointerId); } catch (_) {}
+        ev.preventDefault();
     });
+}
 
-    const completionSymbols = ['✦','✧','◇','◆','◈','✥','✣','✤','✺','✹','✷','✶','✵'];
+if (!window.__efFreeTableDragBound) {
+    window.__efFreeTableDragBound = true;
+    document.addEventListener('pointermove', function (ev) {
+        const state = envoltoTableDragState;
+        if (!state) return;
+        const zoom = Math.max(0.42, efTreeZoom || 1);
+        const dx = (ev.clientX - state.start.x) / zoom;
+        const dy = (ev.clientY - state.start.y) / zoom;
+        if (Math.hypot(dx, dy) <= 4 && !state.moved) return;
+        state.moved = true;
 
-    // Núcleo visual da árvore.
-    const core = document.createElement('div');
-    core.className = 'envolto-tree-core';
-    core.style.left = cx + 'px';
-    core.style.top = cy + 'px';
-    core.innerHTML = '<span>ENVOLTO</span>';
-    nodesContainer.appendChild(core);
+        const layout = efReadTableLayout();
+        layout[state.treeId] = efClampTablePosition({
+            x: state.startPos.x + dx,
+            y: state.startPos.y + dy
+        }, state.W, state.H);
+        efWriteTableLayout(layout);
 
-    // Anel ornamental.
-    const ring = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-    ring.setAttribute('cx', cx);
-    ring.setAttribute('cy', cy);
-    ring.setAttribute('r', rootRadius);
-    ring.setAttribute('class', 'envolto-tree-ring');
-    svgContainer.appendChild(ring);
+        const nodes = document.getElementById('tree-nodes');
+        const svg = document.getElementById('tree-svg');
+        const wrapper = document.getElementById('tree-scroll-wrapper');
+        const trees = advancedTreeData[state.nature];
+        if (nodes && svg && wrapper && trees) {
+            renderEnvoltoTree(trees, state.nature, nodes, svg, wrapper);
+            const movedRoot = document.getElementById('node_root_' + state.treeId);
+            if (movedRoot) movedRoot.classList.add('ef-table-dragging');
+        }
+        ev.preventDefault();
+    }, {passive:false});
 
-    const radiusForLevel = (lvl) => rootRadius - (lvl * tierStep);
-
-    trees.forEach((tree, idx) => {
-        const paletteItem = palette[idx];
-        const baseAngle = (-Math.PI / 2) + (idx * (Math.PI * 2 / count));
-        const branchAngle = baseAngle;
-
-        const rootX = cx + Math.cos(branchAngle) * rootRadius;
-        const rootY = cy + Math.sin(branchAngle) * rootRadius;
-
-        const rootNode = document.createElement('div');
-        rootNode.className = `tree-node envolto-circular-node envolto-root-node envolto-power-${idx}`;
-        rootNode.style.left = rootX + 'px';
-        rootNode.style.top = rootY + 'px';
-        rootNode.style.setProperty('--env-node-top', paletteItem.top);
-        rootNode.style.setProperty('--env-node-bottom', paletteItem.bottom);
-        rootNode.style.setProperty('--env-node-border', paletteItem.border);
-        rootNode.style.setProperty('--env-node-glow', paletteItem.glow);
-        rootNode.style.setProperty('--env-node-glow2', paletteItem.glow2);
-        rootNode.style.setProperty('--env-line-color', paletteItem.line);
-        rootNode.style.setProperty('--env-node-animation', paletteItem.animation1);
-        rootNode.style.setProperty('--env-node-animation-2', paletteItem.animation2);
-        rootNode.id = 'node_root_' + tree.treeId;
-        rootNode.dataset.treeIndex = idx;
-        rootNode.dataset.tier = '0';
-        rootNode.innerHTML = `<span>P${idx + 1}</span><div class="tree-node-label">${tree.name.replace(/^ÁRVORE\s+\d+:\s*/i,'')}</div>`;
-        rootNode.onclick = () => handleRootClick(tree, nature);
-        nodesContainer.appendChild(rootNode);
-
-        let prevX = rootX;
-        let prevY = rootY;
-        const maxTiers = Math.max(...Object.keys(tree.tiers).map(Number));
-
-        let tier3NodeInfo = null;
-
-        for (let lvl = 1; lvl <= maxTiers; lvl++) {
-            const tierList = tree.tiers[lvl];
-            if (!tierList || !tierList.length) break;
-
-            const unlocked = tierList.find(o => currentUnlockedNodes.includes(o.id));
-            if (!unlocked) break;
-
-            const tierRadius = radiusForLevel(lvl);
-            const tierX = cx + Math.cos(branchAngle) * tierRadius;
-            const tierY = cy + Math.sin(branchAngle) * tierRadius;
-
-            drawEnvoltoStraightLine(prevX, prevY, tierX, tierY, svgContainer, true, paletteItem);
-
-            const tierNode = document.createElement('div');
-            tierNode.className = `tree-node envolto-circular-node envolto-tier-node envolto-tier-${lvl} envolto-power-${idx} unlocked`;
-            tierNode.style.left = tierX + 'px';
-            tierNode.style.top = tierY + 'px';
-            tierNode.style.setProperty('--env-node-top', paletteItem.top);
-            tierNode.style.setProperty('--env-node-bottom', paletteItem.bottom);
-            tierNode.style.setProperty('--env-node-border', paletteItem.border);
-            tierNode.style.setProperty('--env-node-glow', paletteItem.glow);
-            tierNode.style.setProperty('--env-node-glow2', paletteItem.glow2);
-            tierNode.style.setProperty('--env-line-color', paletteItem.line);
-            tierNode.style.setProperty('--env-node-animation', paletteItem.animation1);
-            tierNode.style.setProperty('--env-node-animation-2', paletteItem.animation2);
-            tierNode.id = 'node_' + unlocked.id;
-            tierNode.dataset.treeIndex = idx;
-            tierNode.dataset.tier = String(lvl);
-            tierNode.innerHTML = `<span>T${lvl}</span><div class="tree-node-label">${unlocked.name}</div>`;
-            tierNode.onclick = () => handleNodeLevelClick(tree, lvl, unlocked, nature);
-            nodesContainer.appendChild(tierNode);
-
-            prevX = tierX;
-            prevY = tierY;
-
-            if (lvl === 3) {
-                tier3NodeInfo = { x: tierX, y: tierY, symbol: completionSymbols[idx % completionSymbols.length] };
+    document.addEventListener('pointerup', function (ev) {
+        const state = envoltoTableDragState;
+        if (!state) return;
+        const moved = state.moved;
+        const treeId = state.treeId;
+        envoltoTableDragState = null;
+        const root = document.getElementById('node_root_' + treeId);
+        if (root) {
+            root.classList.remove('ef-table-dragging');
+            if (moved) {
+                root.dataset.efDragged = '1';
+                setTimeout(() => { delete root.dataset.efDragged; }, 100);
             }
         }
-
-        // NODO DE COMPLETUDE: aparece apenas depois do Tier 3 selecionado.
-        if (tier3NodeInfo) {
-            const completionX = cx + Math.cos(branchAngle) * completionRadius;
-            const completionY = cy + Math.sin(branchAngle) * completionRadius;
-
-            drawEnvoltoStraightLine(tier3NodeInfo.x, tier3NodeInfo.y, completionX, completionY, svgContainer, true, paletteItem);
-
-            const completionNode = document.createElement('div');
-            completionNode.className = `envolto-completion-node completed envolto-power-${idx}`;
-            completionNode.dataset.branch = String(idx);
-            completionNode.style.left = completionX + 'px';
-            completionNode.style.top = completionY + 'px';
-            completionNode.style.setProperty('--completion-color', paletteItem.border);
-            completionNode.title = 'Completude da ramificação';
-            completionNode.innerHTML = `<span class="completion-symbol" aria-hidden="true">${tier3NodeInfo.symbol}</span>`;
-            nodesContainer.appendChild(completionNode);
+        if (moved) {
+            ev.preventDefault();
+            ev.stopPropagation();
         }
+    }, true);
+
+    document.addEventListener('click', function (ev) {
+        const root = ev.target.closest && ev.target.closest('.ef-table-draggable');
+        if (root && root.dataset.efDragged === '1') {
+            ev.preventDefault();
+            ev.stopImmediatePropagation();
+        }
+    }, true);
+}
+
+function efResetTablePositions(nature) {
+    if (!isEditMode) return;
+    efWriteTableLayout({});
+    renderTree(nature);
+}
+
+let efTreeZoom = null;
+let efTreeZoomManual = false;
+
+function efApplyTreeZoom(scrollWrapper, frame, zoom) {
+    if (!scrollWrapper || !frame) return;
+    const z = Math.max(0.42, Math.min(1.25, Number(zoom) || 1));
+    efTreeZoom = z;
+    scrollWrapper.style.zoom = z;
+    scrollWrapper.style.transform = 'none';
+    scrollWrapper.style.transformOrigin = 'top left';
+    scrollWrapper.style.margin = '0';
+    scrollWrapper.style.width = '1024px';
+    scrollWrapper.style.height = '768px';
+    scrollWrapper.style.minWidth = '1024px';
+    scrollWrapper.style.minHeight = '768px';
+    const out = document.getElementById('ef-zoom-value');
+    if (out) out.textContent = Math.round(z * 100) + '%';
+}
+
+function efFitTreeViewport(scrollWrapper, frame) {
+    if (!scrollWrapper || !frame) return;
+    const availableW = Math.max(320, frame.clientWidth - 18);
+    const availableH = Math.max(420, frame.clientHeight - 18);
+    const fit = Math.min(1, availableW / 1960, availableH / 1360);
+    efTreeZoomManual = false;
+    efApplyTreeZoom(scrollWrapper, frame, fit);
+    requestAnimationFrame(() => {
+        frame.scrollLeft = Math.max(0, (frame.scrollWidth - frame.clientWidth) / 2);
+        frame.scrollTop = Math.max(0, (frame.scrollHeight - frame.clientHeight) / 2);
     });
 }
 
-function drawEnvoltoStraightLine(x1, y1, x2, y2, container, active, paletteItem) {
-    const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-    line.setAttribute('x1', x1);
-    line.setAttribute('y1', y1);
-    line.setAttribute('x2', x2);
-    line.setAttribute('y2', y2);
-    line.setAttribute('class', 'tree-line envolto-circular-line');
-    line.style.setProperty('--env-line-color', paletteItem.line);
-    if (active) line.classList.add('unlocked');
-    container.appendChild(line);
-}
-function drawEnvoltoZigZagLine(x1, y1, x2, y2, container, active, idx, lvl, paletteItem) {
-    const line = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
-    const dx = x2 - x1;
-    const dy = y2 - y1;
-    const len = Math.max(1, Math.hypot(dx, dy));
-    const ux = dx / len;
-    const uy = dy / len;
-    const px = -uy;
-    const py = ux;
-    const sign = ((idx + lvl) % 2 === 0 ? 1 : -1);
-    const amp = 20 + (lvl * 4) + ((idx % 3) * 2);
-
-    const p1x = x1 + dx * 0.28 + px * amp * sign;
-    const p1y = y1 + dy * 0.28 + py * amp * sign;
-    const p2x = x1 + dx * 0.58 - px * amp * 0.72 * sign;
-    const p2y = y1 + dy * 0.58 - py * amp * 0.72 * sign;
-    const p3x = x1 + dx * 0.82 + px * amp * 0.18 * sign;
-    const p3y = y1 + dy * 0.82 + py * amp * 0.18 * sign;
-
-    line.setAttribute('points', `${x1},${y1} ${p1x},${p1y} ${p2x},${p2y} ${p3x},${p3y} ${x2},${y2}`);
-    line.setAttribute('class', 'tree-line envolto-circular-line');
-    line.style.setProperty('--env-line-color', paletteItem.line);
-    if (active) line.classList.add('unlocked');
-    container.appendChild(line);
+function efBindTreeViewControls() {
+    const frame = document.querySelector('#ef-space-final .ef-tree-frame');
+    const wrapper = document.getElementById('tree-scroll-wrapper');
+    if (!frame || !wrapper || wrapper.dataset.controlsBound === '1') return;
+    wrapper.dataset.controlsBound = '1';
+    const fit = document.getElementById('ef-fit-tree');
+    const out = document.getElementById('ef-zoom-value');
+    const change = (delta) => {
+        efTreeZoomManual = true;
+        efApplyTreeZoom(wrapper, frame, (efTreeZoom || 1) + delta);
+    };
+    fit?.addEventListener('click', () => efFitTreeViewport(wrapper, frame));
+    document.getElementById('ef-zoom-out')?.addEventListener('click', () => change(-0.1));
+    document.getElementById('ef-zoom-in')?.addEventListener('click', () => change(0.1));
+    if (out) out.textContent = Math.round((efTreeZoom || 1) * 100) + '%';
+    if (!efTreeZoomManual || !efTreeZoom) efFitTreeViewport(wrapper, frame);
+    if (!window.__efTreeResizeBound) {
+        window.__efTreeResizeBound = true;
+        let timer;
+        window.addEventListener('resize', () => {
+            clearTimeout(timer);
+            timer = setTimeout(() => {
+                const f = document.querySelector('#ef-space-final .ef-tree-frame');
+                const w = document.getElementById('tree-scroll-wrapper');
+                if (f && w && !efTreeZoomManual) efFitTreeViewport(w, f);
+            }, 120);
+        });
+    }
 }
 
+function renderEnvoltoTree(trees, nature, nodesContainer, svgContainer, scrollWrapper) {
+    // Área interna do Espaço Final: 1024×768. A arte da árvore mantém a
+    // proporção do projeto-base 800×700 e é ampliada uniformemente para
+    // ocupar o novo espaço sem esticar horizontal ou verticalmente.
+    const W = 1600, H = 1180, cx = W / 2, cy = H / 2;
+    const BASE_W = 800, BASE_H = 700;
+    const designScale = 1;
+    const count = Math.max(1, trees.length);
+    const rootRadius = 290 * designScale;
+    const tierRadii = [235, 190, 150].map(r => r * designScale);
+    const completionRadius = 82 * designScale;
+
+    const savedLayoutRaw = efReadTableLayout();
+    const layoutVersionEl = document.getElementById('ef-tree-layout-version');
+    const layoutVersion = Number(layoutVersionEl?.value || 0);
+    const savedLayout = {};
+    Object.entries(savedLayoutRaw || {}).forEach(([id, p]) => {
+        if (!p || typeof p !== 'object') return;
+        const px = Number(p.x);
+        const py = Number(p.y);
+        if (!Number.isFinite(px) || !Number.isFinite(py)) return;
+        // Migração única para o canvas normal 1600×1180.
+        // v0.30 usava 1024×768; versões anteriores usavam 800×700.
+        if (layoutVersion >= 31) {
+            savedLayout[id] = { x: px, y: py };
+        } else if (layoutVersion >= 30) {
+            savedLayout[id] = {
+                x: cx + (px - 1024 / 2) * (W / 1024),
+                y: cy + (py - 768 / 2) * (H / 768)
+            };
+        } else {
+            savedLayout[id] = {
+                x: cx + (px - BASE_W / 2) * (W / BASE_W),
+                y: cy + (py - BASE_H / 2) * (H / BASE_H)
+            };
+        }
+    });
+    if (layoutVersion < 31 && Object.keys(savedLayout).length) {
+        efWriteTableLayout(savedLayout);
+        if (layoutVersionEl) layoutVersionEl.value = '31';
+    } else if (layoutVersionEl && layoutVersionEl.value !== '31') {
+        layoutVersionEl.value = '31';
+    }
+    const glyphs = ['☉','◈','⟡','◌','⟁','⌁','∆','◇','✦','✧','✥','✺','✣'];
+    const completion = ['✦','✧','◇','◆','◈','✥','✣','✤','✺','✹','✷','✶','✵'];
+    const themes = [
+      {name:'Warp de Carne', color:'#8f32c8', ink:'#050006', bg:'#d0a4ed', shape:'flesh'},
+      {name:'Sussurro do Vazio', color:'#214f9b', ink:'#02050d', bg:'#9db4df', shape:'void'},
+      {name:'Linhas de Sangue', color:'#cf1730', ink:'#070102', bg:'#eda0aa', shape:'blood'},
+      {name:'Miasma Ácido', color:'#b7d629', ink:'#071000', bg:'#e5ef9b', shape:'acid'},
+      {name:'Ossatura Invertida', color:'#d0b45b', ink:'#110d02', bg:'#efe2ae', shape:'bone'},
+      {name:'Nervo Abissal', color:'#8d2daf', ink:'#050005', bg:'#d2a0e3', shape:'nerve'},
+      {name:'Fenda de Âmbar', color:'#d18b24', ink:'#100700', bg:'#f0cf93', shape:'amber'},
+      {name:'Pupila Morta', color:'#267b73', ink:'#00100e', bg:'#a7dbd7', shape:'eye'},
+      {name:'Geometria Doente', color:'#b92f64', ink:'#090106', bg:'#e6a8bf', shape:'geo'},
+      {name:'Costura Parasita', color:'#5575bf', ink:'#02050e', bg:'#b8c7ed', shape:'suture'},
+      {name:'Eco Calcificado', color:'#8f923a', ink:'#101000', bg:'#d7d999', shape:'calc'},
+      {name:'Fome Carmesim', color:'#d61c25', ink:'#0c0101', bg:'#ef9ca1', shape:'hunger'},
+      {name:'Raiz do Nada', color:'#5d3a8b', ink:'#040109', bg:'#c0acd9', shape:'root'}
+    ];
+
+    scrollWrapper.style.width = W + 'px';
+    scrollWrapper.style.height = H + 'px';
+    scrollWrapper.style.minWidth = W + 'px';
+    scrollWrapper.style.minHeight = H + 'px';
+    scrollWrapper.style.zoom = '1';
+    svgContainer.setAttribute('viewBox', `0 0 ${W} ${H}`);
+    svgContainer.setAttribute('width', W); svgContainer.setAttribute('height', H);
+    nodesContainer.style.width = W + 'px'; nodesContainer.style.height = H + 'px';
+    svgContainer.innerHTML=''; nodesContainer.innerHTML='';
+
+    const core=document.createElement('button');
+    core.type='button';
+    core.className='ef-core';
+    core.style.left=cx+'px'; core.style.top=cy+'px';
+    core.innerHTML='<span class="ef-core-glyph">∅</span><strong>ENVOLTO</strong><small>ESPAÇO FINAL</small>';
+    nodesContainer.appendChild(core);
+
+    let awakened=0;
+    const safeOption=(tree,lvl)=>tree.tiers[lvl]?.find(o=>currentUnlockedNodes.includes(o.id)) || null;
+    const pos=(angle,r)=>({x:cx+Math.cos(angle)*r,y:cy+Math.sin(angle)*r});
+
+    const addOrganicPath=(a,b,theme,idx,lvl,active=true)=>{
+        const ns='http://www.w3.org/2000/svg';
+        const dx=b.x-a.x, dy=b.y-a.y, len=Math.max(1,Math.hypot(dx,dy)), nx=-dy/len, ny=dx/len;
+        const wiggle=18+(idx%3)*5+(lvl*2); const sign=((idx+lvl)%2?1:-1);
+        const p1={x:a.x+dx*.28+nx*wiggle*sign,y:a.y+dy*.28+ny*wiggle*sign};
+        const p2={x:a.x+dx*.58-nx*wiggle*.7*sign,y:a.y+dy*.58-ny*wiggle*.7*sign};
+        const d=`M ${a.x} ${a.y} C ${p1.x} ${p1.y}, ${p2.x} ${p2.y}, ${b.x} ${b.y}`;
+        const under=document.createElementNS(ns,'path'); under.setAttribute('d',d); under.classList.add('ef-path-ink'); svgContainer.appendChild(under);
+        const main=document.createElementNS(ns,'path'); main.setAttribute('d',d); main.classList.add('ef-path'); main.style.setProperty('--ef-branch',theme.color); if(active)main.classList.add('active'); svgContainer.appendChild(main);
+        if(lvl>=2){
+          const bx=a.x+dx*.43+nx*sign*wiggle*.6, by=a.y+dy*.43+ny*sign*wiggle*.6;
+          const twig=document.createElementNS(ns,'path');
+          twig.setAttribute('d',`M ${bx} ${by} q ${nx*sign*22} ${ny*sign*22} ${nx*sign*42} ${ny*sign*4}`);
+          twig.classList.add('ef-twig'); twig.style.setProperty('--ef-branch',theme.color); svgContainer.appendChild(twig);
+        }
+    };
+
+    trees.forEach((tree,idx)=>{
+      const theme=themes[idx%themes.length];
+      const defaultRoot=efDefaultTablePosition(idx,count,W,H);
+      const rootPos=efClampTablePosition(savedLayout[tree.treeId] || defaultRoot,W,H);
+      const base=Math.atan2(rootPos.y-cy,rootPos.x-cx);
+      const branch=`ef-branch-${idx}`;
+      const root=document.createElement('button'); root.type='button';
+      root.className=`ef-node ef-root ef-shape-${theme.shape}`;
+      root.style.left=rootPos.x+'px'; root.style.top=rootPos.y+'px';
+      root.style.setProperty('--ef-branch',theme.color); root.style.setProperty('--ef-ink',theme.ink); root.style.setProperty('--ef-paper',theme.bg);
+      root.dataset.branch=branch; root.dataset.tier='0'; root.id='node_root_'+tree.treeId;
+      root.innerHTML=`<span class="ef-icon">${glyphs[idx%glyphs.length]}</span><small>ÁRVORE ${idx+1}</small><strong>${tree.name.replace(/^ÁRVORE\s+\d+:\s*/i,'')}</strong>`;
+      root.onclick=(ev)=>{ if(root.dataset.efDragged==='1') return; handleRootClick(tree,nature); };
+      nodesContainer.appendChild(root);
+
+      let prev=rootPos;
+      let lastUnlocked=null;
+      for(let lvl=1;lvl<=3;lvl++){
+        const tier=tree.tiers[lvl]||[];
+        const selected=safeOption(tree,lvl);
+        const radius=tierRadii[lvl-1];
+        const angle=base + (lvl===1?-0.05:(lvl===2?0.05:0));
+        const p=pos(angle,radius);
+        const node=document.createElement('button'); node.type='button';
+        node.className=`ef-node ef-tier ef-tier-${lvl} ef-shape-${theme.shape}`;
+        node.style.left=p.x+'px'; node.style.top=p.y+'px';
+        node.style.setProperty('--ef-branch',theme.color); node.style.setProperty('--ef-ink',theme.ink); node.style.setProperty('--ef-paper',theme.bg);
+        node.dataset.branch=branch; node.dataset.tier=String(lvl);
+        if(selected){
+          awakened++; lastUnlocked=selected;
+          node.classList.add('awakened'); node.innerHTML=`<span class="ef-icon">${glyphs[(idx+lvl)%glyphs.length]}</span><small>TIER ${lvl} · CAP ${selected.cap}</small><strong>${selected.name}</strong><i class="ef-tentacle ef-t1"></i><i class="ef-tentacle ef-t2"></i>`;
+          node.onclick=()=>handleNodeLevelClick(tree,lvl,selected,nature);
+        } else {
+          node.classList.add('dormant');
+          node.innerHTML=`<span class="ef-icon">?</span><small>TIER ${lvl}</small><strong>${tier.length?'BLOQUEADO':'VAZIO'}</strong>`;
+          node.onclick=()=>handleRootClick(tree,nature);
+        }
+        nodesContainer.appendChild(node);
+        addOrganicPath(prev,p,theme,idx,lvl,!!selected);
+        prev=p;
+      }
+
+      const cp=pos(base,completionRadius);
+      const finish=document.createElement('button'); finish.type='button';
+      finish.className=`ef-node ef-completion ef-shape-${theme.shape}`;
+      finish.style.left=cp.x+'px'; finish.style.top=cp.y+'px';
+      finish.style.setProperty('--ef-branch',theme.color); finish.style.setProperty('--ef-ink',theme.ink); finish.innerHTML=`<span>${completion[idx%completion.length]}</span><small>CONCLUSÃO</small>`;
+      finish.onclick=()=>handleRootClick(tree,nature); nodesContainer.appendChild(finish);
+      if(lastUnlocked){ addOrganicPath(prev,cp,theme,idx,4,true); addOrganicPath(cp,{x:cx,y:cy},theme,idx,5,true); }
+    });
+
+    const prog=document.getElementById('ef-progress-value'); if(prog)prog.textContent=`${awakened} / ${trees.length*3}`;
+    efBindTreeViewControls();
+    const frame = document.querySelector('#ef-space-final .ef-tree-frame');
+    if (frame && !efTreeZoomManual) efFitTreeViewport(scrollWrapper, frame);
+    else if (frame) efApplyTreeZoom(scrollWrapper, frame, efTreeZoom || 1);
+}
 
 function drawNode(id, badge, label, x, y, active, onClick, container) {
     const div = document.createElement('div');
@@ -3876,7 +4122,11 @@ function buildCharacterPayloadFromBuilder() {
     });
 
     const char = {
-        id: editingIndex !== null && ((document.getElementById('screen-vtt').classList.contains('active') && tablePlayers[editingIndex]) ? (tablePlayers[editingIndex].sourceCharId || tablePlayers[editingIndex].id) : (characters[editingIndex]?.id || Date.now())),
+        id: editingIndex !== null
+            ? ((document.getElementById('screen-vtt').classList.contains('active') && tablePlayers[editingIndex])
+                ? (tablePlayers[editingIndex].sourceCharId || tablePlayers[editingIndex].id)
+                : (characters[editingIndex]?.id || Date.now()))
+            : Date.now(),
         ownerId: currentUser ? currentUser.id : null,
         name: document.getElementById('char-name').value,
         mode: currentMode,
@@ -4267,3 +4517,969 @@ function initBuilderForSelectedMode() {
         }
     };
 })();
+
+
+/* ============================================================
+   CÓDICE DOS MUNDOS — BIBLIOTECAS ÊXODO / OCULTATON
+   ============================================================ */
+(function initWorldCodex() {
+  const screen = document.getElementById('screen-codex');
+  if (!screen || screen.dataset.codexV2 === '1') return;
+  screen.dataset.codexV2 = '1';
+
+  const files = {
+    exodo: [
+      {
+        name: 'Livro Base — Êxodo',
+        description: 'Livro-base e regras do modo de jogo Êxodo.',
+        file: 'assets/codices/Livro-Base-Exodo.pdf',
+        kind: 'Livro Base'
+      }
+    ],
+    ocultaton: [
+      {
+        name: 'Livro Base — Ocultaton',
+        description: 'Livro-base e regras do modo de jogo Ocultaton.',
+        file: 'assets/codices/Livro-Base-Ocultatun.pdf',
+        kind: 'Livro Base'
+      }
+    ]
+  };
+
+  const state = { library: null };
+
+  function esc(v) {
+    return String(v).replace(/[&<>"']/g, c => ({
+      '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+    }[c]));
+  }
+
+  function renderHub() {
+    state.library = null;
+    screen.innerHTML = `
+      <section class="codex-hub">
+        <h1 class="codex-hub-title">Códices dos Mundos</h1>
+        <p class="codex-hub-subtitle">
+          Escolha a biblioteca do modo de jogo que deseja consultar.
+          Cada biblioteca reúne seu livro-base e suas futuras expansões.
+        </p>
+        <div class="codex-library-choice">
+          <article class="codex-mode-card exodo" data-library="exodo">
+            <h2>Êxodo</h2>
+            <p>Assimilação, evolução biológica, tecnologia e sobrevivência em uma realidade transformada.</p>
+            <button class="codex-enter">Acessar Biblioteca</button>
+          </article>
+          <article class="codex-mode-card ocultaton" data-library="ocultaton">
+            <h2>Ocultaton</h2>
+            <p>Horror paranormal, ocultismo, entidades e fenômenos além da compreensão humana.</p>
+            <button class="codex-enter">Acessar Biblioteca</button>
+          </article>
+        </div>
+      </section>`;
+    screen.querySelectorAll('[data-library]').forEach(el => {
+      el.addEventListener('click', () => renderLibrary(el.dataset.library));
+    });
+  }
+
+  function renderLibrary(mode) {
+    state.library = mode;
+    const title = mode === 'exodo' ? 'Biblioteca Êxodo' : 'Biblioteca Ocultaton';
+    const desc = mode === 'exodo'
+      ? 'Arquivo de ficção científica e assimilação.'
+      : 'Arquivo de horror paranormal e ocultismo.';
+    const list = files[mode] || [];
+    screen.innerHTML = `
+      <section class="codex-library ${mode}">
+        <header class="codex-library-header">
+          <button class="codex-back" type="button">← Códices</button>
+          <div>
+            <h2>${title}</h2>
+            <div>${desc}</div>
+          </div>
+        </header>
+        <div class="codex-file-grid">
+          ${list.map((f,i) => `
+            <article class="codex-file-card">
+              <small>${esc(f.kind)}</small>
+              <h3>${esc(f.name)}</h3>
+              <p>${esc(f.description)}</p>
+              <button class="codex-read" data-index="${i}" type="button">Ler no Códice</button>
+            </article>`).join('')}
+        </div>
+      </section>`;
+    screen.querySelector('.codex-back').addEventListener('click', renderHub);
+    screen.querySelectorAll('.codex-read').forEach(btn => {
+      btn.addEventListener('click', () => openReader(list[Number(btn.dataset.index)]));
+    });
+  }
+
+  function openReader(file) {
+    const old = document.querySelector('.codex-reader');
+    if (old) old.remove();
+    const reader = document.createElement('div');
+    reader.className = 'codex-reader';
+    reader.innerHTML = `
+      <header class="codex-reader-header">
+        <strong class="codex-reader-title">${esc(file.name)}</strong>
+        <button class="codex-back" type="button">Fechar</button>
+      </header>
+      <iframe title="${esc(file.name)}" src="${encodeURI(file.file)}"></iframe>`;
+    document.body.appendChild(reader);
+    reader.querySelector('button').addEventListener('click', () => reader.remove());
+  }
+
+  // Expose a small hook so the existing navigation can open the hub.
+  window.openWorldCodex = renderHub;
+
+  // If the existing screen is opened normally, initialize the hub.
+  renderHub();
+})();
+
+// =====================================================================
+// V0.9 — RITUAIS HERMÉTICOS + FORJA MULTISSISTEMA
+// =====================================================================
+(function(){
+    window.currentHermeticRituals = window.currentHermeticRituals || [];
+    window.msForgeContext = 'vtt'; // 'vtt' | 'sheet'
+
+    const ritualStateMap = () => Object.fromEntries((window.currentHermeticRituals || []).map(r => [r.id, r]));
+    const esc = s => (typeof escHtml === 'function' ? escHtml(String(s ?? '')) : String(s ?? ''));
+
+    function hermeticCharacterActive(){
+        return currentMode === 'ocultatun' && currentNature === 'Agente Designado (Ocultatun)' && currentClass === 'Hermético';
+    }
+
+    function ritualLimits(){
+        const int = Number(document.getElementById('attr-int')?.value || 0);
+        const prn = Number(document.getElementById('attr-prn')?.value || 0);
+        return { known: Math.max(0, int + 3), sync: Math.max(0, int + prn) };
+    }
+
+    function normalizeRitualState(list){
+        const raw = Array.isArray(list) ? list : [];
+        const valid = [];
+        raw.forEach(x => {
+            const id = typeof x === 'string' ? x : x?.id;
+            const ritual = hermeticRitualById(id);
+            if (!ritual) return;
+            valid.push({ id: ritual.id, known: x?.known !== false, synchronized: !!x?.synchronized });
+        });
+        return valid;
+    }
+
+    window.renderHermeticRituals = function(){
+        const panel = document.getElementById('tab-rituals');
+        const btn = document.getElementById('btn-tab-rituals');
+        if (!panel || !btn) return;
+        const active = hermeticCharacterActive();
+        btn.style.display = active ? '' : 'none';
+        panel.style.display = active ? '' : 'none';
+        if (!active) return;
+
+        const limits = ritualLimits();
+        const state = ritualStateMap();
+        const knownCount = Object.values(state).filter(r => r.known).length;
+        const syncCount = Object.values(state).filter(r => r.synchronized).length;
+        const knownEl = document.getElementById('hermetic-known-count');
+        const syncEl = document.getElementById('hermetic-sync-count');
+        if (knownEl) knownEl.textContent = `${knownCount}/${limits.known}`;
+        if (syncEl) syncEl.textContent = `${syncCount}/${limits.sync}`;
+
+        const query = (document.getElementById('hermetic-ritual-search')?.value || '').trim().toLowerCase();
+        const filter = document.getElementById('hermetic-ritual-filter')?.value || 'all';
+        const grid = document.getElementById('hermetic-ritual-grid');
+        if (!grid) return;
+        grid.innerHTML = '';
+
+        HERMETIC_RITUALS.forEach(r => {
+            const st = state[r.id] || { id:r.id, known:false, synchronized:false };
+            const hay = `${r.number} ${r.name} ${r.material} ${r.gesture} ${r.verbal} ${r.effect}`.toLowerCase();
+            if (query && !hay.includes(query)) return;
+            if (filter === 'known' && !st.known) return;
+            if (filter === 'synchronized' && !st.synchronized) return;
+            if (filter === 'available' && (st.known || st.synchronized)) return;
+            const article = document.createElement('article');
+            article.className = `ritual-card ${st.known?'is-known':''} ${st.synchronized?'is-synchronized':''}`;
+            article.innerHTML = `
+                <div class="ritual-card-head">
+                    <div class="ritual-sigil" title="Sigilo ${r.number}">${r.sigil}</div>
+                    <div class="ritual-title-wrap"><span class="ritual-number">RITUAL ${String(r.number).padStart(2,'0')} · CAP ${r.cap}</span><h4>${esc(r.name)}</h4><span class="ritual-cost">${r.epCost} EP</span></div>
+                </div>
+                <div class="ritual-card-body">
+                    <p><b>Material:</b> ${esc(r.material)}</p>
+                    <p><b>Gesto:</b> ${esc(r.gesture)}</p>
+                    <p><b>Verbo:</b> <em>${esc(r.verbal)}</em></p>
+                    <p><b>Salvaguarda:</b> ${esc(r.save)}</p>
+                    <p><b>Tempo:</b> ${esc(r.time)}</p>
+                    <p class="ritual-effect"><b>Efeito:</b> ${esc(r.effect)}</p>
+                </div>
+                <div class="ritual-card-actions hide-on-view">
+                    <label><input type="checkbox" class="ritual-known-toggle" data-id="${r.id}" ${st.known?'checked':''}> Conhecido</label>
+                    <label><input type="checkbox" class="ritual-sync-toggle" data-id="${r.id}" ${st.synchronized?'checked':''}> Sintonizado</label>
+                </div>`;
+            grid.appendChild(article);
+        });
+
+        grid.querySelectorAll('.ritual-known-toggle').forEach(cb => cb.addEventListener('change', function(){
+            const id = this.dataset.id;
+            let row = state[id];
+            if (!row) row = {id, known:false, synchronized:false};
+            row.known = this.checked;
+            if (!this.checked) row.synchronized = false;
+            state[id] = row;
+            window.currentHermeticRituals = Object.values(state);
+            renderHermeticRituals();
+            toggleEditUI();
+        }));
+        grid.querySelectorAll('.ritual-sync-toggle').forEach(cb => cb.addEventListener('change', function(){
+            const id = this.dataset.id;
+            let row = state[id];
+            if (!row) row = {id, known:true, synchronized:false};
+            if (this.checked) {
+                if (!row.known) row.known = true;
+                const already = Object.values(state).filter(x => x.synchronized).length;
+                if (!row.synchronized && already >= limits.sync) {
+                    this.checked = false;
+                    return alert(`O Hermético só pode manter ${limits.sync} ritual(is) sintonizado(s) com INT ${Number(document.getElementById('attr-int')?.value||0)} + PRN ${Number(document.getElementById('attr-prn')?.value||0)}.`);
+                }
+            }
+            row.synchronized = this.checked;
+            state[id] = row;
+            window.currentHermeticRituals = Object.values(state);
+            renderHermeticRituals();
+            toggleEditUI();
+        }));
+    };
+
+    window.setHermeticRituals = function(list){
+        window.currentHermeticRituals = normalizeRitualState(list);
+        renderHermeticRituals();
+    };
+
+    window.syncHermeticRitualUI = function(){
+        const active = hermeticCharacterActive();
+        const btn = document.getElementById('btn-tab-rituals');
+        const tab = document.getElementById('tab-rituals');
+        if (btn) btn.style.display = active ? '' : 'none';
+        if (tab) tab.style.display = active ? '' : 'none';
+        if (active) renderHermeticRituals();
+    };
+
+    // Capture existing builder hooks and extend them.
+    const _selectNature = window.selectNature;
+    window.selectNature = function(natureName){
+        const result = _selectNature.call(this, natureName);
+        window.currentHermeticRituals = [];
+        syncHermeticRitualUI();
+        return result;
+    };
+    const _selectClass = window.selectClass;
+    window.selectClass = function(className, skipAutofill=false){
+        const result = _selectClass.call(this, className, skipAutofill);
+        syncHermeticRitualUI();
+        if (hermeticCharacterActive()) {
+            const desc = document.getElementById('subclass-description');
+            if (desc) desc.innerText = `${classDescDict[className] || 'Arquiteto da Simetria.'}\n\nCódice: INT + 3 rituais conhecidos · Sintonia: INT + PRN · Custo padrão: Capacidade × 2 EP.`;
+        }
+        return result;
+    };
+    const _initBuilder = window.initBuilderForSelectedMode;
+    window.initBuilderForSelectedMode = function(){
+        const result = _initBuilder.apply(this, arguments);
+        if (result) { window.currentHermeticRituals = []; syncHermeticRitualUI(); }
+        return result;
+    };
+    const _toggleEditUI = window.toggleEditUI;
+    window.toggleEditUI = function(){
+        const result = _toggleEditUI.apply(this, arguments);
+        document.querySelectorAll('#tab-rituals input[type="checkbox"]').forEach(el => el.disabled = !isEditMode);
+        return result;
+    };
+    const _buildPayload = window.buildCharacterPayloadFromBuilder;
+    window.buildCharacterPayloadFromBuilder = function(){
+        const payload = _buildPayload.apply(this, arguments);
+        payload.rituals = msClone(window.currentHermeticRituals || []);
+        payload.hermeticRitualLimits = ritualLimits();
+        return payload;
+    };
+    const _loadCharacter = window.loadCharacterToBuilder;
+    window.loadCharacterToBuilder = function(){
+        const result = _loadCharacter.apply(this, arguments);
+        const sourceArray = arguments[1] || characters;
+        const index = arguments[0];
+        const char = sourceArray[index];
+        window.currentHermeticRituals = normalizeRitualState(char?.rituals || []);
+        syncHermeticRitualUI();
+        if (arguments[2]) {
+            const ritualBtn=document.getElementById('btn-tab-rituals'), ritualTab=document.getElementById('tab-rituals');
+            if (ritualBtn) ritualBtn.style.display='none';
+            if (ritualTab) ritualTab.style.display='none';
+        }
+        renderEquipmentSheet();
+        return result;
+    };
+
+    // -----------------------------------------------------------------
+    // Equipment normalization + mode-accurate forge schemas.
+    // -----------------------------------------------------------------
+    window.normalizeEquipment = function(item){
+        const x = msClone(item || {});
+        x.id = x.id || `eq-${Date.now()}-${Math.random().toString(36).slice(2,7)}`;
+        x.name = x.name || 'Item sem nome';
+        x.category = x.category || 'Equipamento';
+        x.effect = x.effect || '';
+        x.source = x.source || 'Inventário';
+        if (x.pe !== undefined && x.pe !== null && x.pe !== '' && !isNaN(Number(x.pe))) x.pe = Number(x.pe);
+        if (x.stage !== undefined && x.stage !== null && x.stage !== '' && !isNaN(Number(x.stage))) x.stage = Number(x.stage);
+        if (x.charges !== undefined && x.charges !== null && x.charges !== '' && !isNaN(Number(x.charges))) x.charges = Number(x.charges);
+        return x;
+    };
+
+    function charModeNature(char){
+        const nature = char?.nature || currentNature || '';
+        const mode = char?.mode || currentMode || (nature.includes('Ocultatun') || nature.includes('Envolto') || nature.includes('Ordem dos Sete') ? 'ocultatun' : 'exodo');
+        return { mode, nature };
+    }
+
+    window.currentBuilderCharacter = function(){
+        return {
+            mode: currentMode || document.getElementById('char-mode')?.value || 'exodo',
+            nature: currentNature || document.getElementById('char-nature')?.value || '',
+            className: currentClass || document.getElementById('char-class')?.value || '',
+            name: document.getElementById('char-name')?.value || '',
+            stats: {
+                for:Number(document.getElementById('attr-for')?.value||0),
+                vig:Number(document.getElementById('attr-vig')?.value||0),
+                agi:Number(document.getElementById('attr-agi')?.value||0),
+                int:Number(document.getElementById('attr-int')?.value||0),
+                prn:Number(document.getElementById('attr-prn')?.value||0),
+                pre:Number(document.getElementById('attr-pre')?.value||0)
+            }
+        };
+    };
+
+    function forgeSchema(char){
+        const {mode,nature} = charModeNature(char);
+        if (nature === 'O Envolto (Horror Cósmico)') return {
+            key:'envolto', mode:'ocultatun',
+            title:'Engenharia do Blasfemo',
+            subtitle:'Chassi Profano + Enxerto Aberrante + Válvula de Potência + Gatilho de Falha.',
+            chassis:[['Ligeiro',2],['Padrão',5],['Massivo',8],['Proteção',4]],
+            vectors:[], categories:['Artefato Blasfemo'],
+            specials:true
+        };
+        if (nature === 'A Ordem dos Sete (Alta Glória)') return {
+            key:'ordem', mode:'ocultatun',
+            title:'Forja das Dádivas',
+            subtitle:'Chassi Divino + Vetores de Ascensão + Estágio + Propósito Sagrado.',
+            chassis:[['Ligeiro',2],['Padrão',5],['Massivo',8],['Proteção',4],['Utilitário',3]],
+            vectors:['Arkhé','Ex-Nihilo','Poesis Pleroma'], categories:['Dádiva'],
+            specials:true
+        };
+        if (mode === 'exodo') return {
+            key:'exodo', mode:'exodo',
+            title:'Forja de Dispositivos de Êxodo',
+            subtitle:'Chassi + Vetores de Função (VF) + Estágio (ES) + MCP + Extras.',
+            chassis:[['Equipamento',5],['Dispositivo',15],['Resquício',40]],
+            vectors:['Emissão','Cinético','Biótico','Psíquico','Sensorial','Temporal','Contenção'], categories:['Equipamento','Dispositivo','Resquício'],
+            specials:true
+        };
+        return {
+            key:'ocultatun', mode:'ocultatun',
+            title:'Forja da Ocultatun',
+            subtitle:'Chassi + Vetores de Manifestação (VM) + Estágio (ES) + Categoria.',
+            chassis:[['Ligeiro',2],['Padrão',5],['Massivo',8],['Proteção',4],['Utilitário',3]],
+            vectors:(lists?.ocultatun?.powers?.['Agente Designado (Ocultatun)']||['Destrutiva','Fluxo','Fissura','Decadência','Manipulação','Propagação','Pactual','Quebra']),
+            categories:['Ritualístico','Anômalo'], specials:true
+        };
+    }
+
+    function refreshForgeFields(char){
+        const schema = forgeSchema(char);
+        const chassisEl = document.getElementById('forge-chassis');
+        const categoryEl = document.getElementById('forge-category');
+        const vectorsEl = document.getElementById('forge-vectors');
+        const labelChassis = document.querySelector('#forge-chassis')?.closest('.form-group')?.querySelector('label');
+        const labelCat = document.querySelector('#forge-category')?.closest('.form-group')?.querySelector('label');
+        const labelVec = document.querySelector('#forge-vectors')?.closest('.form-group')?.querySelector('label');
+        if (labelChassis) labelChassis.textContent = schema.key==='exodo' ? 'Categoria de item / chassi' : 'Chassi';
+        if (labelCat) labelCat.textContent = schema.key==='ocultatun' ? 'Categoria de Item' : schema.key==='envolto' ? 'Natureza da Forja' : schema.key==='ordem' ? 'Categoria' : 'Categoria';
+        if (labelVec) labelVec.textContent = schema.key==='exodo' ? 'Vetores de Função (VF)' : schema.key==='ocultatun' ? 'Vetores de Manifestação (VM)' : 'Vetores de Ascensão';
+        chassisEl.innerHTML = schema.chassis.map(([name,pe])=>`<option value="${esc(name)}" data-pe="${pe}">${esc(name)} — ${pe} PE</option>`).join('');
+        categoryEl.innerHTML = schema.categories.map(cat=>`<option value="${esc(cat)}">${esc(cat)}${cat==='Ritualístico'?' — desconto de 5 PE':''}${cat==='Anômalo'?' — custo integral':''}</option>`).join('');
+        vectorsEl.innerHTML = schema.vectors.map(v=>`<option value="${esc(v)}">${esc(v)}</option>`).join('');
+        const target = document.getElementById('forge-recipient')?.closest('.form-group');
+        if(target) target.style.display = msForgeContext==='sheet' ? 'none' : '';
+        const stageWrap = document.getElementById('forge-stage')?.closest('.form-group');
+        if(stageWrap) stageWrap.style.display = schema.key==='envolto' ? 'none' : '';
+        const vectorWrap = document.getElementById('forge-vectors')?.closest('.form-group');
+        if(vectorWrap) vectorWrap.style.display = schema.vectors.length ? '' : 'none';
+        const ex = document.getElementById('forge-exodo-fields');
+        const en = document.getElementById('forge-envolto-fields');
+        const or = document.getElementById('forge-ordem-fields');
+        if(ex) ex.style.display = schema.key==='exodo' ? '' : 'none';
+        if(en) en.style.display = schema.key==='envolto' ? '' : 'none';
+        if(or) or.style.display = schema.key==='ordem' ? '' : 'none';
+        const categoryWrap = categoryEl?.closest('.form-group');
+        if(categoryWrap) categoryWrap.style.display = schema.categories.length ? '' : 'none';
+        updateForgeCost();
+    }
+
+    function getForgeVectorValues(){ return [...document.getElementById('forge-vectors')?.selectedOptions || []].map(o=>o.value); }
+
+    window.updateForgeCost = function(){
+        const targetChar = msForgeContext==='sheet' ? currentBuilderCharacter() : getVttCharById(document.getElementById('forge-recipient')?.value) || currentBuilderCharacter();
+        const schema = forgeSchema(targetChar);
+        const ch = document.getElementById('forge-chassis');
+        const base = Number(ch?.selectedOptions?.[0]?.dataset?.pe || 0);
+        const stage = Math.min(10, Math.max(1, Number(document.getElementById('forge-stage')?.value || 1)));
+        const vectors = getForgeVectorValues();
+        let total = base;
+        let lines = [`Chassi ${base} PE`];
+        let details = {};
+
+        if(schema.key==='exodo'){
+            const vectorPE = vectors.length*5, esPE=stage*2;
+            const mm=Number(document.getElementById('forge-mcp-multi')?.value||0);
+            const me=Number(document.getElementById('forge-mcp-effect')?.value||0);
+            const mcp=(mm||me) ? Math.max(10,3*mm)+2*me : 0;
+            const extras=Number(document.getElementById('forge-extras')?.value||0);
+            total += vectorPE+esPE+mcp+extras;
+            details={vectorPE,esPE,mcp,extras};
+            lines.push(`${vectorPE} PE VF`, `${esPE} PE ES ${stage}`, `${mcp} PE MCP`, `${extras} PE Extras`);
+        } else if(schema.key==='ocultatun'){
+            const vectorPE=vectors.length*5, esPE=stage*2, discount=document.getElementById('forge-category')?.value==='Ritualístico'?-5:0;
+            total += vectorPE+esPE+discount;
+            details={vectorPE,esPE,discount};
+            lines.push(`${vectorPE} PE VM`, `${esPE} PE ES ${stage}`, `${discount} PE categoria`);
+        } else if(schema.key==='envolto'){
+            const residueCost=Number(document.getElementById('forge-residue')?.selectedOptions?.[0]?.dataset?.pe||0);
+            const valve=Number(document.getElementById('forge-valve')?.value||0);
+            const valveCost=[0,6,12][Math.max(0,Math.min(2,valve))]||0;
+            const curse=document.getElementById('forge-curse')?.value ? -5 : 0;
+            total += residueCost+valveCost+curse;
+            details={residueCost,valveCost,curse,valve};
+            lines.push(`${residueCost} PE enxerto`, `${valveCost} PE válvula T${valve}`, `${curse} PE maldição`);
+        } else if(schema.key==='ordem'){
+            const vectorPE=vectors.length*5, esPE=stage*2;
+            total += vectorPE+esPE;
+            details={vectorPE,esPE};
+            lines.push(`${vectorPE} PE Ascensões`, `${esPE} PE ES ${stage}`);
+        }
+        const preview=document.getElementById('forge-preview');
+        if(preview) preview.innerHTML=`<b>Custo estimado: ${total} PE</b><span>${lines.map(esc).join(' · ')}</span>`;
+        return {schema,base,stage,vectors,total,details};
+    };
+
+    function buildForgeItem(target){
+        const calc=updateForgeCost();
+        const schema=calc.schema;
+        const name=document.getElementById('forge-name')?.value.trim();
+        if(!name) throw new Error('Defina o nome do item.');
+        const chassis=document.getElementById('forge-chassis').value;
+        const effect=document.getElementById('forge-effect').value.trim();
+        const item={id:`eq-${Date.now()}-${Math.random().toString(36).slice(2,7)}`,name,chassis,pe:calc.total,effect,source:'Forja oficial do site',system:schema.key};
+        if(schema.key==='exodo'){
+            const mm=Number(document.getElementById('forge-mcp-multi')?.value||0), me=Number(document.getElementById('forge-mcp-effect')?.value||0), stage=calc.stage;
+            item.category=document.getElementById('forge-category').value;
+            item.stage=stage; item.vectors=calc.vectors; item.integrity=Math.round(10+Number(document.getElementById('forge-chassis').selectedOptions[0].dataset.pe||0)/2);
+            item.saturation=calc.vectors.reduce((sum,v)=>sum+({Emissão:4,'Cinético':2,Biótico:3,Psíquico:5,Sensorial:1,Temporal:5,Contenção:2}[v]||0),0)+(mm||me?2:0);
+            item.mcp={multi:3*mm,effect:2*me}; item.extras=Number(document.getElementById('forge-extras')?.value||0);
+        } else if(schema.key==='ocultatun'){
+            item.category=document.getElementById('forge-category').value; item.stage=calc.stage; item.vectors=calc.vectors;
+            const vig=Number(target?.stats?.vig||document.getElementById('attr-vig')?.value||0); item.charges=10+vig-calc.stage;
+            item.activation=item.category==='Anômalo'?'Ao ativar: 1d4 Dano Mental (Sanidade) ou -5 PV.':'Após a missão, teste de degradação; o item ritualístico pode enferrujar/perder potência.';
+        } else if(schema.key==='envolto'){
+            item.category='Artefato Blasfemo'; item.residue=document.getElementById('forge-residue').value; item.valveTier=Number(document.getElementById('forge-valve').value||0); item.curse=document.getElementById('forge-curse').value || '';
+            item.integrity={pv:Math.max(10,Math.round(10+(Number(document.getElementById('forge-chassis').selectedOptions[0].dataset.pe||0)*1.5))),rd:item.chassis==='Proteção'?10:5};
+            item.activation='Canaliza a Energia do Envolto/EE do usuário conforme a válvula instalada.';
+        } else if(schema.key==='ordem'){
+            item.category='Dádiva'; item.stage=calc.stage; item.vectors=calc.vectors; item.purpose=document.getElementById('forge-purpose').value.trim();
+            if(!item.purpose) throw new Error('A Dádiva exige um Propósito Sagrado.');
+            const vig=Number(target?.stats?.vig||document.getElementById('attr-vig')?.value||0); item.charges=10+vig-calc.stage; item.forgeDC=10+calc.stage; item.recordacaoMin=25;
+        }
+        return normalizeEquipment(item);
+    }
+
+    window.openForgeForCurrentSheet = function(){
+        msForgeContext='sheet';
+        const modal=document.getElementById('forge-modal'); if(!modal)return;
+        document.getElementById('forge-name').value=''; document.getElementById('forge-stage').value='1'; document.getElementById('forge-effect').value='';
+        document.getElementById('forge-eyebrow').textContent='ARSENAL · FORJA DE FICHA';
+        const schema=forgeSchema(currentBuilderCharacter());
+        document.getElementById('forge-title').textContent=schema.title;
+        document.getElementById('forge-subtitle').textContent=schema.subtitle;
+        refreshForgeFields(currentBuilderCharacter());
+        populateForgeRecipients();
+        modal.style.display='flex';
+    };
+
+    window.openForgeWindow = function(){
+        msForgeContext='vtt';
+        const modal=document.getElementById('forge-modal'); if(!modal)return;
+        const mode=getTableGameMode();
+        const first=getVttCharById(document.getElementById('forge-recipient')?.value) || tablePlayers.find(p=>!p.isNPC) || {mode};
+        const schema=forgeSchema(first);
+        document.getElementById('forge-name').value=''; document.getElementById('forge-stage').value='1'; document.getElementById('forge-effect').value='';
+        document.getElementById('forge-eyebrow').textContent='FORJA MULTISSISTEMA · PE';
+        document.getElementById('forge-title').textContent=schema.title;
+        document.getElementById('forge-subtitle').textContent=schema.subtitle;
+        refreshForgeFields(first);
+        populateForgeRecipients();
+        modal.style.display='flex';
+    };
+
+    window.populateForgeRecipients = function(){
+        const s=document.getElementById('forge-recipient'); if(!s)return;
+        const mode=getTableGameMode();
+        const targetList=tablePlayers.filter(p=>!p.isNPC);
+        s.innerHTML=targetList.map(p=>`<option value="${esc(p.id)}">${esc(p.name)} · ${esc(p.nature||p.mode||mode)}</option>`).join('');
+        if(!s.innerHTML) s.innerHTML='<option value="">Nenhum jogador compatível</option>';
+        s.onchange=()=>{ if(msForgeContext==='vtt'){ const c=getVttCharById(s.value); const schema=forgeSchema(c||{}); document.getElementById('forge-title').textContent=schema.title; document.getElementById('forge-subtitle').textContent=schema.subtitle; refreshForgeFields(c||{}); } };
+    };
+
+    window.forgeItemForTable = function(){
+        try{
+            const target = msForgeContext==='sheet' ? currentBuilderCharacter() : getVttCharById(document.getElementById('forge-recipient')?.value);
+            if(msForgeContext==='vtt' && !target) throw new Error('Defina um destinatário.');
+            const item=buildForgeItem(target);
+            if(msForgeContext==='sheet'){
+                currentSheetEquipment.push(item);
+                renderEquipmentSheet();
+                closeForgeWindow();
+                alert(`${item.name} foi adicionado à ficha. O custo calculado é ${item.pe} PE.`);
+            } else {
+                target.equipment=Array.isArray(target.equipment)?target.equipment:[];
+                target.equipment.push(item);
+                syncVttCharacterToOwner(target);
+                currentTableData=currentTableData||{};
+                currentTableData.forgedItems=Array.isArray(currentTableData.forgedItems)?currentTableData.forgedItems:[];
+                currentTableData.forgedItems.push(item);
+                renderVttCards(); renderVttEquipment(); renderEquipmentShop(); closeForgeWindow();
+                alert(`${item.name} foi forjado e entregue a ${target.name}.`);
+            }
+        }catch(e){ alert(e.message || 'Não foi possível concluir a forja.'); }
+    };
+
+    window.closeForgeWindow = function(){ const m=document.getElementById('forge-modal'); if(m)m.style.display='none'; };
+
+    // The existing equipment profile is refined so all four equipment architectures remain distinct.
+    window.getEquipmentProfile = function(char=currentBuilderCharacter()){
+        const {mode,nature}=charModeNature(char);
+        if(nature==='O Envolto (Horror Cósmico)') return {mode,key:'envolto',eyebrow:'OCULTATUN · ENVOLTO',title:'Engenharia do Blasfemo',subtitle:'Chassi Profano, Resíduo Ontológico, Válvula de Potência e Gatilho de Falha.',addTitle:'Registrar Artefato Blasfemo',addSubtitle:'Use a forja para calcular o PE e registrar enxertos do Espaço Final.',labels:['Nome do artefato','Categoria / chassi','Resíduo / válvula / maldição','Efeito / corrupção'],placeholders:['Ex.: Lâmina que Chora','Artefato Blasfemo · Padrão','Carne Estática · T1 · Fome','Descrição e falha'],fields:'envolto'};
+        if(nature==='A Ordem dos Sete (Alta Glória)') return {mode,key:'ordem',eyebrow:'OCULTATUN · ORDEM DOS SETE',title:'Dádivas Forjadas',subtitle:'Chassi Divino + Ascensões + Estágio + Propósito; cargas de integridade e Estase Dimensional.',addTitle:'Registrar Dádiva',addSubtitle:'Dádivas são estáveis e exigem Propósito Sagrado.',labels:['Nome da Dádiva','Chassi / categoria','Ascensões · ES · cargas','Propósito / efeito'],placeholders:['Ex.: Lança da Revelação','Dádiva · Padrão','Arkhé + Ex-Nihilo · ES 4','Propósito e efeito'],fields:'ordem'};
+        if(mode==='exodo') return {mode,key:'exodo',eyebrow:'ÊXODO · ENGENHARIA',title:'Dispositivos & Equipamentos',subtitle:'PE = Chassi + VF + ES + MCP + Extras. O inventário acompanha o sistema técnico de Êxodo.',addTitle:'Registrar equipamento de Êxodo',addSubtitle:'Use a Forja para calcular PE, VF, ES, MCP e Integridade.',labels:['Nome do item','Categoria / tipo','PE · VF · ES · MCP','Efeito / função'],placeholders:['Ex.: Braçadeira Neurocinética','Dispositivo · VF Cinético','28 PE · ES 4 · MCP 0','Descrição'],fields:'exodo'};
+        return {mode:'ocultatun',key:'ocultatun',eyebrow:'OCULTATUN · ARSENAL',title:'Arsenal Anômalo & Ritualístico',subtitle:'PE = Chassi + VM + ES + Categoria. Cargas e Gamma Lock pertencem ao próprio item.',addTitle:'Registrar equipamento da Ocultatun',addSubtitle:'Use a Forja para calcular Chassi, VM, ES e categoria.',labels:['Nome do item','Categoria / tipo','PE · ES · Cargas','Efeito / VM / observações'],placeholders:['Lâmina, rifle, dispositivo...','Ritualístico ou Anômalo · Chassi','Ex.: 11 PE · ES 3 · 10 cargas','Descrição'],fields:'ocultatun'};
+    };
+    window.applyEquipmentProfile = function(char=currentBuilderCharacter()){
+        const p=getEquipmentProfile(char); const set=(id,val)=>{const e=document.getElementById(id); if(e)e.textContent=val;};
+        set('equipment-sheet-eyebrow',p.eyebrow); set('equipment-sheet-title',p.title); set('equipment-sheet-subtitle',p.subtitle); set('equipment-add-eyebrow',p.eyebrow); set('equipment-add-title',p.addTitle); set('equipment-add-subtitle',p.addSubtitle);
+        ['name','type','meta','effect'].forEach((k,i)=>{set(`sheet-eq-${k}-label`,p.labels[i]); const e=document.getElementById(`sheet-eq-${k}`); if(e)e.placeholder=p.placeholders[i];});
+        const profile=document.getElementById('equipment-sheet-profile');
+        if(profile){
+            const data={
+                exodo:['PE técnico','Chassi + VF + ES','MCP + Extras','Integridade / Saturação'],
+                ocultatun:['PE de Arsenal','Chassi + VM + ES','Ritualístico / Anômalo','Cargas / Gamma Lock'],
+                envolto:['PE blasfemo','Chassi + Resíduo','Válvula + Maldição','PV/RD do artefato'],
+                ordem:['PE sagrado','Chassi + Ascensões','ES + Propósito','Cargas / Estase']
+            }[p.key] || [];
+            profile.innerHTML=data.map(x=>`<span>${esc(x)}</span>`).join('');
+        }
+    };
+    window.renderEquipmentSheet = function(){
+        const c=document.getElementById('equipment-sheet-list'); if(!c)return;
+        applyEquipmentProfile(); c.innerHTML='';
+        if(!currentSheetEquipment.length){ c.innerHTML='<div class="equipment-empty">Nenhum item registrado nesta ficha.</div>'; return; }
+        const p=getEquipmentProfile();
+        currentSheetEquipment.forEach((it,i)=>{
+            let meta='';
+            if(p.key==='exodo') meta=`<span><b>PE</b>${esc(it.pe??'—')}</span><span><b>ES</b>${esc(it.stage??'—')}</span><span><b>VF</b>${esc((it.vectors||[]).join(', ')||'—')}</span><span><b>Int.</b>${esc(it.integrity??'—')}</span>`;
+            else if(p.key==='ocultatun') meta=`<span><b>PE</b>${esc(it.pe??'—')}</span><span><b>ES</b>${esc(it.stage??'—')}</span><span><b>Cargas</b>${esc(it.charges??'—')}</span><span><b>Cat.</b>${esc(it.category||'—')}</span>`;
+            else if(p.key==='envolto') meta=`<span><b>PE</b>${esc(it.pe??'—')}</span><span><b>Resíduo</b>${esc(it.residue||'—')}</span><span><b>Válvula</b>T${esc(it.valveTier??0)}</span><span><b>Falha</b>${esc(it.curse||'—')}</span>`;
+            else meta=`<span><b>PE</b>${esc(it.pe??'—')}</span><span><b>ES</b>${esc(it.stage??'—')}</span><span><b>Cargas</b>${esc(it.charges??'—')}</span><span><b>Propósito</b>${esc(it.purpose||'—')}</span>`;
+            c.innerHTML += `<article class="equipment-item-card ${it.category==='Anômalo'||it.system==='envolto'?'anomalous':''} mode-${p.key}"><div class="equipment-item-main"><span class="equipment-tag">${esc(it.category||'Equipamento')}</span><h4>${esc(it.name)}</h4><p>${esc(it.effect||'Sem descrição.')}</p></div><div class="equipment-item-meta">${meta}<button class="hide-on-view equipment-remove" onclick="removeEquipmentFromCurrentSheet(${i})">×</button></div></article>`;
+        });
+    };
+    window.addEquipmentToCurrentSheet = function(){
+        const p=getEquipmentProfile(); const name=document.getElementById('sheet-eq-name').value.trim(); if(!name)return alert('Dê um nome ao item.');
+        const type=document.getElementById('sheet-eq-type').value.trim()||'Equipamento'; const meta=document.getElementById('sheet-eq-meta').value.trim(); const effect=document.getElementById('sheet-eq-effect').value.trim()||'Sem descrição.';
+        const item={name,category:type,effect,notes:meta,source:'Registro manual',system:p.key};
+        if(p.key==='exodo'){item.link=meta;item.status='Íntegro';}
+        else if(p.key==='ocultatun'){item.pe='—';item.stage='—';item.charges='—';}
+        else if(p.key==='envolto'){item.pe='—';item.residue=meta;}
+        else {item.pe='—';item.stage='—';item.charges='—';item.purpose=meta;}
+        currentSheetEquipment.push(normalizeEquipment(item)); renderEquipmentSheet(); document.getElementById('equipment-add-modal').style.display='none'; ['sheet-eq-name','sheet-eq-type','sheet-eq-meta','sheet-eq-effect'].forEach(id=>document.getElementById(id).value='');
+    };
+    window.removeEquipmentFromCurrentSheet = function(i){ if(!isEditMode)return; currentSheetEquipment.splice(i,1); renderEquipmentSheet(); };
+
+    const _openEquipmentAddModal=window.openEquipmentAddModal;
+    window.openEquipmentAddModal=function(){ applyEquipmentProfile(); _openEquipmentAddModal(); };
+
+    // Let the VTT equipment browser understand all four architectures.
+    window.renderVttEquipment = function(){
+        const c=document.getElementById('vtt-equipment-list'); if(!c)return; c.innerHTML='';
+        if(!tablePlayers.length){c.innerHTML='<div class="equipment-empty">Nenhuma ficha presente na mesa.</div>';return;}
+        tablePlayers.forEach((p,i)=>{
+            const items=Array.isArray(p.equipment)?p.equipment:[], prof=getEquipmentProfile(p);
+            c.innerHTML += `<section class="vtt-player-arsenal mode-${prof.key}"><div class="vtt-player-arsenal-head"><div><span class="eyebrow">${esc(prof.eyebrow)}</span><h4>${esc(p.name)}</h4><p>${esc(prof.subtitle)}</p></div><button class="souls-btn small-btn" onclick="openCharacterEquipmentFromVtt(${i})">ABRIR FICHA</button></div>${items.length ? items.map(it=>{ const bits=prof.key==='exodo'?`PE ${it.pe??'—'} · ES ${it.stage??'—'}`:prof.key==='ocultatun'?`PE ${it.pe??'—'} · ES ${it.stage??'—'} · Cargas ${it.charges??'—'}`:prof.key==='envolto'?`PE ${it.pe??'—'} · Válvula T${it.valveTier??0}`:`PE ${it.pe??'—'} · ES ${it.stage??'—'} · Cargas ${it.charges??'—'}`; return `<div class="vtt-eq-row"><div><b>${esc(it.name)}</b><span>${esc(it.category||'Equipamento')} · ${esc(bits)}</span></div><p>${esc(it.effect||'')}</p></div>`; }).join('') : '<div class="equipment-empty compact">Sem equipamentos registrados.</div>'}</section>`;
+        });
+    };
+
+    // Add a visible builder-forge button next to the manual item button.
+    const eqHead=document.querySelector('#tab-equipment .equipment-sheet-head');
+    if(eqHead && !document.getElementById('btn-forge-sheet-item')){
+        const b=document.createElement('button'); b.type='button'; b.id='btn-forge-sheet-item'; b.className='souls-btn small-btn hide-on-view'; b.textContent='⚒ FORJAR ITEM'; b.onclick=()=>openForgeForCurrentSheet(); eqHead.appendChild(b);
+    }
+
+    // Initialize once DOM is ready. The script is loaded at the end of body, so a microtask is sufficient.
+    Promise.resolve().then(()=>{ syncHermeticRitualUI(); applyEquipmentProfile(); renderEquipmentSheet(); });
+})();
+
+
+// =====================================================================
+// V0.11 — ALQUERINO · LABORATÓRIO DE SÍNTESE / INGREDIENTES / CAMINHOS
+// Conteúdo canônico baseado no Livro Base — Ocultaton: Ecos 1.5.
+// =====================================================================
+(function(){
+    const ALCHEMY_INGREDIENTS = [
+      ['água de chuva coletada durante um fenômeno anômalo','R2'],['olho de criatura precognitiva','R3'],['página escrita antes do evento que descreve','R3'],
+      ['cristal de memória temporal','R3'],['pena de ave que nunca pousou','R3'],['sangue de alguém que teve déjà-vu anômalo','R2'],
+      ['relógio parado em uma morte','R4'],['olho de vidente','R4'],['tinta feita de memória futura','R4'],
+      ['fragmento de objeto anômalo destruído','R4'],['sangue de testemunha morta','R4'],['cinza de documento apagado da história','R5'],
+      ['segundo ponteiro de relógio que marcou um instante inexistente','R5'],['memória de uma pessoa apagada','R5'],['lágrima de alguém que ainda não morreu','R6'],
+      ['fragmento de linha temporal colapsada','R6'],['sangue de viajante temporal','R6'],['fotografia de acontecimento que nunca aconteceu','R6'],
+      ['primeiro instante de uma linha temporal','R7'],['último instante de uma linha temporal','R7'],['conhecimento de uma entidade temporal','R7'],
+      ['sangue de penitente','R2'],['erva cultivada em local de sofrimento','R2'],['água benta ou equivalente ritual','R2'],
+      ['lágrima de pessoa que perdoou seu maior inimigo','R3'],['cinza de confissão','R3'],['flor que cresce sobre sepultura','R2'],
+      ['tecido regenerativo anômalo','R4'],['sangue de criatura regenerativa','R4'],['cicatriz voluntariamente reaberta','R3'],
+      ['lágrima de criatura sobrenatural','R4'],['coração de animal empático','R4'],['confissão escrita por alguém condenado','R5'],
+      ['coração de mártir','R5'],['sangue de três espécies diferentes','R5'],['relíquia de alguém que morreu por outra pessoa','R6'],
+      ['tecido de entidade regenerativa Classe B','R6'],['essência vital preservada','R6'],['relíquia de um santo, mártir ou equivalente','R6'],
+      ['fragmento de vida primordial','R7'],['sofrimento condenado','R7'],['conceito de perdão','R7'],
+      ['pena de entidade celeste','R3'],['cinza de fogo sobrenatural','R2'],['sangue de criatura voadora','R2'],
+      ['pena celestial','R3'],['carvão de incêndio anômalo','R3'],['óleo solar','R3'],
+      ['osso de entidade alada','R4'],['chama de fenômeno paranormal','R4'],['metal que não projeta sombra','R3'],
+      ['sangue de entidade celestial','R5'],['pena de arcanjo','R5'],['fogo de estrela anômala','R5'],
+      ['seis penas celestiais diferentes','R6'],['fragmento de estrela','R6'],['lágrima de entidade divina','R6'],
+      ['coração de entidade celeste','R6'],['cinza de anjo','R6'],['fragmento de espaço sagrado','R6'],
+      ['essência de divindade','R7'],['chama primordial','R7'],['nome verdadeiro de uma entidade celeste','R7'],
+      ['corda de execução','R2'],['sangue de alguém condenado injustamente','R3'],['carta do Enforcado','R3'],
+      ['objeto de alguém que sacrificou a própria vida','R3'],['sangue de mártir','R3'],['fio de destino','R4'],
+      ['poeira de nexo','EX'],['arrependimento','EX'],['mercúrio','EX']
+    ].map(([name,rarity],i)=>({id:`ing-${i+1}`,name,rarity}));
+
+    const P = (path,seq,name,cap,cd,effect,ingredients,cost='') => ({id:`${path.toLowerCase().replace(/[^a-z0-9]+/g,'-')}-${seq}`,source:'official',path,seq,name,cap,cd,effect,cost,ingredients});
+    const OFFICIAL_PATHS = {
+      'Profeta': {philosophy:'O futuro não é destino. É uma consequência que ainda não aconteceu.', nodes:[
+        P('Profeta',1,'O Ouvinte',2,13,'Recebe Pré-Cognição menor. Uma vez por cena, pode perguntar ao Mestre: “Qual é o maior perigo imediato desta situação?” O Mestre responde honestamente.',['água de chuva coletada durante um fenômeno anômalo','olho de criatura precognitiva','página escrita antes do evento que descreve']),
+        P('Profeta',2,'O Vidente',3,16,'Uma vez por cena: +5 Defesa Passiva contra o primeiro ataque que sofrer. Além disso, pode declarar “Eu já vi isso” e repetir um teste de Percepção ou Prontidão recém-falhado.',['cristal de memória temporal','pena de ave que nunca pousou','sangue de alguém que teve déjà-vu anômalo']),
+        P('Profeta',3,'O Profeta',4,19,'Recebe Pré-Cognição de Combate. No início do combate, pode perguntar ao Mestre quem atacará primeiro, qual inimigo possui maior intenção hostil e qual ação provável de um inimigo. Além disso, ganha +2 Iniciativa.',['relógio parado em uma morte','olho de vidente','tinta feita de memória futura']),
+        P('Profeta',4,'O Oráculo',5,22,'Recebe Pós-Cognição. Pode tocar objeto ou local e observar acontecimento ocorrido até 7 dias atrás. Custo: 2 ES. Pode realizar uma pergunta sobre a visão.',['fragmento de objeto anômalo destruído','sangue de testemunha morta','cinza de documento apagado da história'],'2 ES'),
+        P('Profeta',5,'O Testemunho',7,25,'Uma vez por cena, antes de uma ação de um aliado, pode declarar “Eu sei que isso vai funcionar”. Se o aliado falhar, pode permitir uma segunda rolagem.',['segundo ponteiro de relógio que marcou um instante inexistente','memória de uma pessoa apagada','lágrima de alguém que ainda não morreu']),
+        P('Profeta',6,'O Visionário',8,28,'Pode observar 1 minuto do futuro. Durante esse período, pode alterar uma decisão pessoal baseada no que viu. Uma vez por descanso longo: Reescrever Instante. Quando for atingido, pode retornar sua posição e estado para o início da rodada.',['fragmento de linha temporal colapsada','sangue de viajante temporal','fotografia de acontecimento que nunca aconteceu']),
+        P('Profeta',7,'O Profeta Eterno',10,31,'Torna-se uma entidade de Pré-Cognição e Pós-Cognição. Pode observar passado, presente e futuros possíveis. Uma vez por sessão pode perguntar ao Mestre: “Qual acontecimento precisa ocorrer para que X seja possível?” A resposta é verdadeira.',['primeiro instante de uma linha temporal','último instante de uma linha temporal','conhecimento de uma entidade temporal'])
+      ]},
+      'Penitente': {philosophy:'Dor não é punição. Dor é conhecimento. E aquilo que compreende a própria dor pode decidir o que fazer com ela.', nodes:[
+        P('Penitente',1,'O Arrependido',2,13,'Recebe Resistência Emocional +3. Pode reduzir uma condição mental Leve para nenhuma uma vez por cena.',['sangue de penitente','erva cultivada em local de sofrimento','água benta ou equivalente ritual']),
+        P('Penitente',2,'O Disciplinado',3,16,'Recebe imunidade a medo comum e intimidação mundana. Pode gastar 1 ES para remover uma condição emocional Leve.',['lágrima de pessoa que perdoou seu maior inimigo','cinza de confissão','flor que cresce sobre sepultura'],'1 ES'),
+        P('Penitente',3,'O Flagelado',4,19,'Recebe Regeneração 2 PV por rodada; não funciona se estiver em 0 PV. Além disso, pode converter 5 PV perdidos em +2 em um teste de Vontade.',['tecido regenerativo anômalo','sangue de criatura regenerativa','cicatriz voluntariamente reaberta']),
+        P('Penitente',4,'O Confessor',5,22,'Pode controlar emoções. Ação Padrão + 3 ES. Um alvo realiza Vontade contra CD 10 + PRE + 5. Falha permite remover medo, reduzir raiva, acalmar pânico, induzir tristeza ou impedir uma reação emocional.',['lágrima de criatura sobrenatural','coração de animal empático','confissão escrita por alguém condenado'],'3 ES'),
+        P('Penitente',5,'O Mártir',7,25,'Recebe Regeneração 5 PV/rodada. Pode receber ferimento destinado a outra pessoa a até 9m. Uma vez por rodada: Reação + 2 ES. Transfere até 10 PV de dano.',['coração de mártir','sangue de três espécies diferentes','relíquia de alguém que morreu por outra pessoa'],'2 ES'),
+        P('Penitente',6,'O Santo',8,28,'Recebe Regeneração 10 PV/rodada. Pode restaurar olho, órgão, membro ou sentido. Uma vez por descanso longo: Ressurreição Parcial. Um cadáver morto há até 24 horas retorna com 1 PV.',['tecido de entidade regenerativa Classe B','essência vital preservada','relíquia de um santo, mártir ou equivalente']),
+        P('Penitente',7,'O Penitente Divino',10,31,'Torna-se uma entidade que representa Redenção através do sofrimento. Pode regenerar aliados, restaurar corpo, remover estados mentais, transferir ferimento, ressuscitar morto e dividir sofrimento entre criaturas. Sua divindade exige uma regra: não pode remover sofrimento sem assumir alguma consequência equivalente.',['fragmento de vida primordial','sofrimento condenado','conceito de perdão'])
+      ]},
+      'Arcanjo': {philosophy:'A divindade não pede permissão para existir.', nodes:[
+        P('Arcanjo',1,'Asas',2,13,'Recebe +2 AGI. Pode manifestar asas temporárias. Voo: 12 metros.',['pena de entidade celeste','cinza de fogo sobrenatural','sangue de criatura voadora']),
+        P('Arcanjo',2,'Serafim Menor',3,16,'Recebe Resistência a fogo 5. Pode produzir fogo angelical: 1d6 dano energético.',['pena celestial','carvão de incêndio anômalo','óleo solar']),
+        P('Arcanjo',3,'Guardião',4,19,'Voo: 25 metros. Recebe +3 Defesa Passiva. Fogo angelical: 2d6.',['osso de entidade alada','chama de fenômeno paranormal','metal que não projeta sombra']),
+        P('Arcanjo',4,'Anjo',5,22,'Transformação Angelical. Ação Rápida + 3 ES. Durante uma cena: asas, olho luminoso, Resistência a dano físico 5, voo 30m e fogo angelical 3d6.',['sangue de entidade celestial','pena de arcanjo','fogo de estrela anômala'],'3 ES'),
+        P('Arcanjo',5,'Serafim',7,25,'Transformação completa. Recebe +4 AGI, Resistência a dano 10 e Fogo Angelical 3d6. Pode emitir uma rajada de 6m.',['seis penas celestiais diferentes','fragmento de estrela','lágrima de entidade divina']),
+        P('Arcanjo',6,'Arcanjo',8,28,'Recebe Velocidade sobrenatural. Uma vez por rodada, pode realizar uma ação de Movimento adicional. Fogo angelical: 5d6. Pode teleportar-se 18m como Ação Rápida.',['coração de entidade celeste','cinza de anjo','fragmento de espaço sagrado']),
+        P('Arcanjo',7,'Arcanjo Divino',10,31,'Torna-se uma entidade angelológica. Recebe voo, velocidade sobrenatural, fogo celestial, resistência, aura sagrada e transformação angelical completa. Pode criar fogo celestial em reagente. Sua presença passa a impor uma autoridade conceitual.',['essência de divindade','chama primordial','nome verdadeiro de uma entidade celeste'])
+      ]}
+    };
+    const HIDDEN_PATHS = [
+      {path:'Enforcado',source:'hidden',note:'Trecho documentado no capítulo Caminhos Ocultos.',nodes:[
+        P('Enforcado',1,'O Pendurado',2,13,'Pode suspender-se em superfícies. Recebe +2 AGI e vantagem para escapar de contenção.',['corda de execução','sangue de alguém condenado injustamente','carta do Enforcado']),
+        P('Enforcado',2,'O Sacrifício',3,16,'Pode transferir 5 PV próprios para +5 em qualquer teste, uma vez por cena.',['objeto de alguém que sacrificou a própria vida','sangue de mártir','fio de destino']),
+        P('Enforcado',3,'A Inversão',4,19,'Pode inverter cima/baixo, atração/repulsão, vantagem/desvantagem e direção de movimento. Custo: 2 ES.',['sangue de alguém condenado injustamente','fio de destino','carta do Enforcado'],'2 ES')
+      ]}
+    ];
+
+    const SEQUENCES = [
+      ['I','Despertar'],['II','Assimilação'],['III','Transfiguração'],['IV','Ascensão'],['V','Conceito'],['VI','Arquétipo'],['VII','Apoteose']
+    ];
+
+    const state = {
+      selectedIngredients: [],
+      inventory: {},
+      unlocked: [],
+      customFormulas: [],
+      customPaths: [],
+      preparations: []
+    };
+    ALCHEMY_INGREDIENTS.forEach(i=>state.inventory[i.id]=0);
+
+    function isAlq(){ return currentMode==='ocultatun' && currentNature==='Agente de Carreira (Ocultatun)' && currentClass==='Alquerino'; }
+    function esc(v){ return typeof escHtml==='function'?escHtml(String(v??'')):String(v??''); }
+    function allNodes(){ return [...Object.values(OFFICIAL_PATHS).flatMap(x=>x.nodes), ...HIDDEN_PATHS.flatMap(x=>x.nodes)]; }
+    function ingredientByName(name){ return ALCHEMY_INGREDIENTS.find(x=>x.name===name); }
+    function rarityLabel(r){ return ({R1:'Comum',R2:'Incomum',R3:'Anômalo',R4:'Raro',R5:'Singular',R6:'Conceitual',R7:'Divino',EX:'Mencionado'})[r]||r; }
+    function selectedIds(){ return state.selectedIngredients.slice(); }
+    function selectedNames(){ return selectedIds().map(id=>ALCHEMY_INGREDIENTS.find(x=>x.id===id)?.name).filter(Boolean); }
+    function normalizedSet(a){ return a.slice().sort((x,y)=>x.localeCompare(y,'pt-BR')); }
+    function exactMatch(node){ return normalizedSet(node.ingredients).join('|')===normalizedSet(selectedNames()).join('|'); }
+
+    window.switchAlchemyPanel=function(panel){
+      document.querySelectorAll('.alchemy-nav-btn').forEach(b=>b.classList.toggle('active',b.dataset.alchemyPanel===panel));
+      document.querySelectorAll('.alchemy-panel').forEach(p=>p.classList.toggle('active',p.id===`alchemy-panel-${panel}`));
+      if(panel==='paths') renderOfficialPaths();
+      if(panel==='formulas') renderAlchemyFormulaLibrary();
+      if(panel==='ingredients') renderAlchemyIngredientLibrary();
+      if(panel==='forge') renderCustomPathBuilder();
+    };
+
+    window.renderAlchemyIngredients=function(){
+      const grid=document.getElementById('alchemy-ingredient-grid'); if(!grid)return;
+      const q=(document.getElementById('alchemy-ingredient-search')?.value||'').toLowerCase().trim();
+      const rf=document.getElementById('alchemy-rarity-filter')?.value||'all';
+      grid.innerHTML=ALCHEMY_INGREDIENTS.filter(i=>(rf==='all'||i.rarity===rf)&&(!q||i.name.toLowerCase().includes(q))).map(i=>{
+        const qty=Number(state.inventory[i.id]||0), sel=state.selectedIngredients.includes(i.id);
+        return `<button type="button" class="ingredient-chip ${sel?'selected':''}" onclick="toggleAlchemyIngredient('${i.id}')"><span class="ingredient-rarity ${i.rarity}">${i.rarity}</span><strong>${esc(i.name)}</strong><small>${rarityLabel(i.rarity)} · posse ${qty}</small></button>`;
+      }).join('') || '<div class="alchemy-empty">Nenhum reagente encontrado.</div>';
+    };
+
+    window.renderAlchemyIngredientLibrary=function(){
+      const grid=document.getElementById('alchemy-ingredient-library'); if(!grid)return;
+      const q=(document.getElementById('alchemy-ingredient-library-search')?.value||'').toLowerCase().trim();
+      const rf=document.getElementById('alchemy-ingredient-library-filter')?.value||'all';
+      grid.innerHTML=ALCHEMY_INGREDIENTS.filter(i=>(rf==='all'||i.rarity===rf)&&(!q||i.name.toLowerCase().includes(q))).map(i=>`<div class="ingredient-library-card"><div><span class="ingredient-rarity ${i.rarity}">${i.rarity}</span><b>${esc(i.name)}</b><small>${rarityLabel(i.rarity)}</small></div><label>Qtd<input type="number" min="0" value="${Number(state.inventory[i.id]||0)}" onchange="setAlchemyIngredientQty('${i.id}',this.value)"></label></div>`).join('') || '<div class="alchemy-empty">Nenhum reagente.</div>';
+    };
+    window.setAlchemyIngredientQty=function(id,value){ state.inventory[id]=Math.max(0,Number(value)||0); renderAlchemyIngredients(); renderAlchemyIngredientLibrary(); renderCombinationVessel(); };
+    window.__ALCHEMY_INGREDIENT_IDS=ALCHEMY_INGREDIENTS.map(i=>i.id);
+    window.__setAlchemyBulkQty=function(op,n){ const q=Math.max(0,Number(n)||0); ALCHEMY_INGREDIENTS.forEach(i=>{ const cur=Math.max(0,Number(state.inventory[i.id]||0)); state.inventory[i.id]=op==='add'?cur+q:op==='sub'?Math.max(0,cur-q):q; }); renderAlchemyIngredients(); renderAlchemyIngredientLibrary(); renderCombinationVessel(); };
+    window.toggleAlchemyIngredient=function(id){
+      const idx=state.selectedIngredients.indexOf(id);
+      if(idx>=0) state.selectedIngredients.splice(idx,1);
+      else if(state.selectedIngredients.length<3) state.selectedIngredients.push(id);
+      else return alert('A câmara de combinação comporta exatamente três reagentes.');
+      renderAlchemyIngredients(); renderCombinationVessel(); renderCustomPathBuilder();
+    };
+    window.clearAlchemyCombination=function(){ state.selectedIngredients=[]; renderAlchemyIngredients(); renderCombinationVessel(); renderCustomPathBuilder(); };
+    function renderCombinationVessel(){
+      document.querySelectorAll('#alchemy-panel-bench .reagent-flask').forEach((f,i)=>{const id=state.selectedIngredients[i];const ing=id&&ALCHEMY_INGREDIENTS.find(x=>x.id===id);f.classList.toggle('filled',!!ing);f.querySelector('.flask-bulb b').textContent=ing?ing.rarity:'+';f.querySelector('.flask-bulb small').textContent=ing?ing.name:'vazio';});
+      const c=document.getElementById('alchemy-free-reagent-count'); if(c)c.textContent=`${state.selectedIngredients.length}/3`;
+      const cap=Number(document.getElementById('alchemy-free-cap')?.value||1), comp=Number(document.getElementById('alchemy-free-complexity')?.value||0); const cd=document.getElementById('alchemy-free-cd'); if(cd)cd.textContent=String(10+cap+comp);
+    }
+    function canPrepare(){ const int=Number(document.getElementById('attr-int')?.value||0), grau=Number(document.getElementById('spec-alquerino-ocultismo-grau')?.value||0); return state.preparations.length < (int+grau); }
+    window.combineAlchemyIngredients=function(){
+      if(state.selectedIngredients.length!==3) return alert('Selecione três ingredientes para a síntese.');
+      const names=selectedNames(); const matches=allNodes().filter(exactMatch); const consume=document.getElementById('alchemy-consume-reagents')?.checked; const insufficient=state.selectedIngredients.filter(id=>(Number(state.inventory[id]||0)<1)); if(consume&&insufficient.length) return alert('A bancada não possui uma unidade de cada reagente selecionado. Ajuste o almoxarifado antes de consumir a mistura.');
+      const box=document.getElementById('alchemy-unlocked-formula');
+      if(!canPrepare()) return alert('O Alquerino já atingiu o limite de preparos deste descanso longo.');
+      if(matches.length){ const m=matches[0]; if(!state.unlocked.includes(m.id))state.unlocked.push(m.id); if(consume)state.selectedIngredients.forEach(id=>state.inventory[id]=Math.max(0,Number(state.inventory[id]||0)-1)); state.preparations.push({id:`prep-${Date.now()}`,type:'Caminho',name:`${m.path} · ${m.name}`,cap:m.cap,insumo:names.join(' + '),note:`Etapa ${m.seq} desbloqueada · CD ${m.cd}`}); box.innerHTML=`<div class="formula-match success"><b>FÓRMULA RECONHECIDA</b><strong>${esc(m.path)} · ${esc(m.name)}</strong><span>Cap. ${m.cap} · CD ${m.cd}${m.cost?' · Custo '+esc(m.cost):''}</span><small>${esc(m.effect)}</small><button type="button" class="souls-btn mini-btn" onclick="switchAlchemyPanel('formulas')">ABRIR FÓRMULA</button></div>`; }
+      else { if(consume)state.selectedIngredients.forEach(id=>state.inventory[id]=Math.max(0,Number(state.inventory[id]||0)-1)); box.innerHTML=`<div class="formula-match neutral"><b>SÍNTESE NÃO CATALOGADA</b><strong>Os três reagentes formam um composto livre.</strong><small>${esc(names.join(' + '))}</small><span>Use a Fórmula Livre para registrar o efeito, forma e estabilidade da mistura.</span></div>`; }
+      window.currentAlquerinoPreparations=state.preparations; renderAlchemyIngredients(); renderAlchemyIngredientLibrary(); renderCombinationVessel(); renderAlquerinoLab();
+    };
+
+    window.renderOfficialPaths=function(){
+      const wrap=document.getElementById('alquerino-official-paths'); if(!wrap)return;
+      wrap.innerHTML=Object.values(OFFICIAL_PATHS).map(path=>`<article class="official-path-card"><header><div><span class="path-index">✦</span><b>Caminho ${esc(path.nodes[0].path)}</b><small>${esc(path.philosophy)}</small></div><span class="path-count">${path.nodes.filter(n=>state.unlocked.includes(n.id)).length}/7 DESBLOQUEADAS</span></header><div class="path-node-list">${path.nodes.map(n=>`<div class="path-node-card ${state.unlocked.includes(n.id)?'unlocked':''}"><div class="path-node-top"><span>Seq. ${n.seq}</span><b>${esc(n.name)}</b><em>CAP ${n.cap} · CD ${n.cd}</em></div><p>${esc(n.effect)}</p><div class="formula-ingredients">${n.ingredients.map(x=>`<span>${esc(x)}</span>`).join('')}</div><button type="button" class="path-use-btn" onclick="loadFormulaIngredients('${n.id}')">${state.unlocked.includes(n.id)?'FÓRMULA DESBLOQUEADA':'CARREGAR NA CÂMARA'}</button></div>`).join('')}</div></article>`).join('');
+      const hidden=document.getElementById('alquerino-hidden-paths'); if(hidden)hidden.innerHTML=HIDDEN_PATHS.map(path=>`<article class="hidden-path-list"><h5>Caminho ${esc(path.path)}</h5><small>${esc(path.note)}</small>${path.nodes.map(n=>`<div class="hidden-node"><div><b>${esc(n.name)}</b><span>Cap. ${n.cap} · CD ${n.cd}</span></div><p>${esc(n.effect)}</p><div class="formula-ingredients">${n.ingredients.map(x=>`<span>${esc(x)}</span>`).join('')}</div><button type="button" class="path-use-btn" onclick="loadFormulaIngredients('${n.id}')">CARREGAR</button></div>`).join('')}</article>`).join('');
+    };
+    window.loadFormulaIngredients=function(nodeId){ const custom=[...state.customFormulas,...state.customPaths.flatMap(p=>p.nodes||[])]; const n=[...allNodes(),...custom].find(x=>x.id===nodeId); if(!n)return; state.selectedIngredients=(n.ingredients||[]).map(ingredientByName).filter(Boolean).map(x=>x.id); switchAlchemyPanel('bench'); setTimeout(()=>{renderAlchemyIngredients();renderCombinationVessel();},0); };
+
+    window.renderAlchemyFormulaLibrary=function(){
+      const grid=document.getElementById('alchemy-formula-library'); if(!grid)return;
+      const q=(document.getElementById('alchemy-formula-search')?.value||'').toLowerCase().trim(); const f=document.getElementById('alchemy-formula-filter')?.value||'all';
+      const formulas=[...allNodes(),...state.customFormulas,...state.customPaths.flatMap(p=>p.nodes||[])];
+      grid.innerHTML=formulas.filter(x=>(f==='all'||(f==='official'&&x.source==='official')||(f==='hidden'&&x.source==='hidden')||(f==='custom'&&x.source==='custom'))&&(!q||`${x.path} ${x.name} ${x.effect} ${x.ingredients.join(' ')}`.toLowerCase().includes(q))).map(x=>`<article class="formula-library-card ${x.source}"><div class="formula-library-head"><span>${x.source==='custom'?'LIVRE':x.source==='hidden'?'OCULTA':'OFICIAL'}</span><b>${esc(x.path)} · ${esc(x.name)}</b><em>CAP ${x.cap} · CD ${x.cd}</em></div><p>${esc(x.effect)}</p><div class="formula-ingredients">${x.ingredients.map(i=>`<button type="button" onclick="loadIngredientByName('${encodeURIComponent(i)}')">${esc(i)}</button>`).join('')}</div><button type="button" class="path-use-btn" onclick="loadFormulaIngredients('${esc(x.id)}')">CARREGAR FÓRMULA</button></article>`).join('') || '<div class="alchemy-empty">Nenhuma fórmula encontrada.</div>';
+    };
+    window.loadIngredientByName=function(encoded){ const name=decodeURIComponent(encoded); const ing=ingredientByName(name); if(!ing)return; if(state.selectedIngredients.length<3&&!state.selectedIngredients.includes(ing.id)) state.selectedIngredients.push(ing.id); renderAlchemyIngredients(); renderCombinationVessel(); switchAlchemyPanel('bench'); };
+
+    window.saveFreeAlchemyFormula=function(){
+      if(!canPrepare())return alert('O limite de preparos deste descanso longo já foi alcançado.');
+      if(state.selectedIngredients.length!==3)return alert('Combine três ingredientes antes de gravar uma fórmula livre.'); const consume=document.getElementById('alchemy-consume-reagents')?.checked; const insufficient=state.selectedIngredients.filter(id=>(Number(state.inventory[id]||0)<1)); if(consume&&insufficient.length)return alert('Faltam reagentes no almoxarifado para este preparo.');
+      const name=(document.getElementById('alchemy-free-name')?.value||'Fórmula Livre').trim(); const type=document.getElementById('alchemy-free-type')?.value||'Poção'; const form=document.getElementById('alchemy-free-form')?.value||'Líquido'; const cap=Number(document.getElementById('alchemy-free-cap')?.value||1); const complexity=Number(document.getElementById('alchemy-free-complexity')?.value||0); const fn=(document.getElementById('alchemy-free-function')?.value||'').trim(); const stability=(document.getElementById('alchemy-free-stability')?.value||'').trim();
+      const f={id:`free-${Date.now()}`,source:'custom',path:'Preparo Livre',seq:'—',name,effect:`${type} em forma de ${form}. Função: ${fn||'a definir'}. Estabilidade: ${stability||'a definir'}. CD ${10+cap+complexity}.`,cap,cd:10+cap+complexity,ingredients:selectedNames(),cost:'ES conforme Potências usadas'}; if(consume)state.selectedIngredients.forEach(id=>state.inventory[id]=Math.max(0,Number(state.inventory[id]||0)-1)); state.customFormulas.push(f); state.unlocked.push(f.id); state.preparations.push({id:f.id,type,name,cap,insumo:selectedNames().join(' + '),note:`Fórmula Livre · ${form} · CD ${f.cd}`}); window.currentAlquerinoPreparations=state.preparations; alert(`Fórmula “${name}” gravada na biblioteca.`); renderAlchemyFormulaLibrary(); renderAlquerinoLab(); };
+
+    window.saveNewAlchemyPathNode=function(){
+      if(state.selectedIngredients.length!==3)return alert('Uma nova etapa de Caminho precisa de três ingredientes selecionados na câmara.');
+      const path=(document.getElementById('alchemy-new-path-name')?.value||'Caminho Novo').trim(); const philosopher=(document.getElementById('alchemy-new-path-philosophy')?.value||'').trim(); const seq=Number(document.getElementById('alchemy-new-path-seq')?.value||1); const cap=Number(document.getElementById('alchemy-new-path-cap')?.value||1); const cd=Number(document.getElementById('alchemy-new-path-cd')?.value||10+cap); const name=(document.getElementById('alchemy-new-path-ability')?.value||`Etapa ${seq}`).trim(); const effect=(document.getElementById('alchemy-new-path-effect')?.value||'').trim();
+      let item=state.customPaths.find(x=>x.path===path); if(!item){item={path,philosophy,nodes:[],source:'custom'};state.customPaths.push(item);} item.nodes.push({id:`custom-path-${Date.now()}`,source:'custom',path,seq,name,cap,cd,effect,ingredients:selectedNames()}); item.nodes.sort((a,b)=>a.seq-b.seq); state.unlocked.push(item.nodes[item.nodes.length-1].id); renderCustomPathBuilder(); renderAlchemyFormulaLibrary(); alert(`Etapa ${seq} gravada em ${path}.`);
+    };
+    window.renderCustomPathBuilder=function(){
+      const box=document.getElementById('alchemy-new-path-reagents'); if(box)box.innerHTML=selectedNames().map((n,i)=>`<div class="selected-reagent-line"><span>${String.fromCharCode(65+i)}</span><b>${esc(n)}</b><small>${ingredientByName(n)?.rarity||''}</small></div>`).join('')||'<div class="alchemy-empty">Selecione três ingredientes na Câmara de Combinação.</div>';
+      const list=document.getElementById('alchemy-custom-path-list'); if(list)list.innerHTML=state.customPaths.map(p=>`<article class="custom-path-card"><header><b>${esc(p.path)}</b><small>${esc(p.philosophy||'')}</small></header>${p.nodes.map(n=>`<div><span>${n.seq} · ${esc(SEQUENCES[n.seq-1]?.[1]||'')}</span><b>${esc(n.name)}</b><p>${esc(n.effect)}</p></div>`).join('')}</article>`).join('')||'<div class="alchemy-empty">Nenhum Caminho novo gravado.</div>';
+    };
+
+    function getStats(){ const int=Number(document.getElementById('attr-int')?.value||0), pre=Number(document.getElementById('attr-pre')?.value||0), pat=Number(document.getElementById('spec-alquerino-patamar')?.value||1), grau=Number(document.getElementById('spec-alquerino-ocultismo-grau')?.value||0); return {int,pre,pat,grau,prepMax:int+grau,esMax:8+int+pre+pat}; }
+    window.renderAlquerinoLab=function(){
+      const tab=document.getElementById('tab-alquerino'), btn=document.getElementById('btn-tab-alquerino'); if(!tab||!btn)return; btn.style.display=isAlq()?'':'none'; tab.style.display=isAlq()?'':'none'; if(!isAlq())return;
+      const s=getStats(); document.getElementById('alquerino-prep-capacity').textContent=String(s.prepMax); document.getElementById('alquerino-es-total').textContent=String(s.esMax); document.getElementById('alquerino-fadiga-total').textContent=String(state.fadiga||0);
+      renderAlchemyIngredients(); renderAlchemyFormulaLibrary(); renderAlchemyIngredientLibrary(); renderOfficialPaths(); renderCombinationVessel(); renderCustomPathBuilder();
+      const list=document.getElementById('alquerino-preparos-list'); if(list)list.innerHTML=state.preparations.length?state.preparations.map((p,i)=>`<article class="prepared-vial"><div class="prepared-vial-icon">⚗</div><div><b>${esc(p.name||p.type||'Preparo')}</b><small>${esc(p.cap?'Cap. '+p.cap:'')}${p.insumo?' · '+esc(p.insumo):''}</small><span>${esc(p.note||'')}</span></div><button type="button" class="hide-on-view" onclick="removeAlquerinoPreparation(${i})">×</button></article>`).join(''):'<div class="alchemy-empty">Nenhuma mistura pronta. Use a Câmara de Combinação e grave uma fórmula.</div>';
+    };
+    window.removeAlquerinoPreparation=function(i){ if(!isEditMode)return; state.preparations.splice(i,1); window.currentAlquerinoPreparations=state.preparations; renderAlquerinoLab(); };
+
+    const oldPayload=window.buildCharacterPayloadFromBuilder;
+    if(typeof oldPayload==='function') window.buildCharacterPayloadFromBuilder=function(){ const payload=oldPayload.apply(this,arguments); payload.alquerino={...(payload.alquerino||{}),patamar:document.getElementById('spec-alquerino-patamar')?.value||'1',ocultismoGrau:Number(document.getElementById('spec-alquerino-ocultismo-grau')?.value||0),inventory:msClone(state.inventory),unlocked:msClone(state.unlocked),customFormulas:msClone(state.customFormulas),customPaths:msClone(state.customPaths),preparacoes:msClone(state.preparations)}; return payload; };
+
+    const oldSelectNature=window.selectNature; if(typeof oldSelectNature==='function') window.selectNature=function(){ const r=oldSelectNature.apply(this,arguments); resetState(); renderAlquerinoLab(); return r; };
+    const oldSelectClass=window.selectClass; if(typeof oldSelectClass==='function') window.selectClass=function(){ const r=oldSelectClass.apply(this,arguments); renderAlquerinoLab(); return r; };
+    const oldLoad=window.loadCharacterToBuilder;
+    if(typeof oldLoad==='function') window.loadCharacterToBuilder=function(){ const r=oldLoad.apply(this,arguments); const sourceArray=arguments[1]||characters, idx=arguments[0], ch=sourceArray[idx], a=ch?.alquerino||{}; resetState(); Object.assign(state.inventory,a.inventory||{}); state.unlocked=Array.isArray(a.unlocked)?msClone(a.unlocked):[]; state.customFormulas=Array.isArray(a.customFormulas)?msClone(a.customFormulas):[]; state.customPaths=Array.isArray(a.customPaths)?msClone(a.customPaths):[]; state.preparations=Array.isArray(a.preparacoes)?msClone(a.preparacoes):[]; const pat=document.getElementById('spec-alquerino-patamar'); const og=document.getElementById('spec-alquerino-ocultismo-grau'); if(pat)pat.value=a.patamar||a.nivel||'1'; if(og)og.value=a.ocultismoGrau??'0'; window.currentAlquerinoPreparations=state.preparations; renderAlquerinoLab(); return r; };
+    function resetState(){ state.selectedIngredients=[]; ALCHEMY_INGREDIENTS.forEach(i=>state.inventory[i.id]=0); state.unlocked=[]; state.customFormulas=[]; state.customPaths=[]; state.preparations=[]; window.currentAlquerinoPreparations=state.preparations; }
+    const oldToggle=window.toggleEditUI; if(typeof oldToggle==='function')window.toggleEditUI=function(){const r=oldToggle.apply(this,arguments);document.querySelectorAll('#tab-alquerino input,#tab-alquerino select,#tab-alquerino textarea,#tab-alquerino button').forEach(el=>{if(el.classList.contains('alchemy-nav-btn'))return;el.disabled=!isEditMode;});renderAlquerinoLab();return r;};
+
+    document.addEventListener('DOMContentLoaded',()=>setTimeout(renderAlquerinoLab,80));
+})();
+
+/* =====================================================================
+   V0.27 — ESPAÇO FINAL: VIEWPORT LIVRE, ÁREA INTERNA FIXA 1960×1360
+   A árvore não é redimensionada, reposicionada nem reconstruída pelo pan.
+   O movimento atua somente no viewport externo através de scrollLeft/Top.
+   ===================================================================== */
+let efViewportPanState = null;
+
+function efApplyTreeZoom(scrollWrapper, frame, zoom) {
+    if (!scrollWrapper || !frame) return;
+    efTreeZoom = 1;
+    scrollWrapper.style.zoom = '1';
+    scrollWrapper.style.transform = 'none';
+    scrollWrapper.style.transformOrigin = 'top left';
+    scrollWrapper.style.margin = '0';
+    scrollWrapper.style.width = '1600px';
+    scrollWrapper.style.height = '1180px';
+    scrollWrapper.style.minWidth = '1600px';
+    scrollWrapper.style.minHeight = '1180px';
+    const out = document.getElementById('ef-zoom-value');
+    if (out) out.textContent = '100% · ESCALA 1:1';
+}
+
+function efFitTreeViewport(scrollWrapper, frame) {
+    if (!scrollWrapper || !frame) return;
+    efTreeZoomManual = true;
+    efApplyTreeZoom(scrollWrapper, frame, 1);
+    requestAnimationFrame(() => {
+        frame.scrollLeft = Math.max(0, (frame.scrollWidth - frame.clientWidth) / 2);
+        frame.scrollTop = Math.max(0, (frame.scrollHeight - frame.clientHeight) / 2);
+    });
+}
+
+function efBindTreeViewportPan(frame) {
+    if (!frame || frame.dataset.panBound === '1') return;
+    frame.dataset.panBound = '1';
+    frame.classList.add('ef-free-pan');
+
+    // Prefer pan by translating the internal scroll wrapper so the visual
+    // background moves even when scrollbars are not present. Fallback to
+    // scrollLeft/scrollTop when wrapper is missing.
+    const wrapper = frame.querySelector('#tree-scroll-wrapper') || document.getElementById('tree-scroll-wrapper');
+
+    frame.addEventListener('pointerdown', function(ev) {
+        if (ev.button !== 0) return;
+        const target = ev.target;
+        if (target && target.closest && (
+            target.closest('.ef-node') ||
+            target.closest('button') ||
+            target.closest('input') ||
+            target.closest('select') ||
+            target.closest('textarea') ||
+            target.closest('a')
+        )) return;
+
+        if (wrapper) {
+            // read existing translate values (stored in data attributes)
+            const startX = Number(wrapper.dataset.panX) || 0;
+            const startY = Number(wrapper.dataset.panY) || 0;
+            efViewportPanState = {
+                pointerId: ev.pointerId,
+                x: ev.clientX,
+                y: ev.clientY,
+                startX,
+                startY,
+                moved: false,
+                mode: 'transform'
+            };
+        } else {
+            efViewportPanState = {
+                pointerId: ev.pointerId,
+                x: ev.clientX,
+                y: ev.clientY,
+                left: frame.scrollLeft,
+                top: frame.scrollTop,
+                moved: false,
+                mode: 'scroll'
+            };
+        }
+
+        frame.classList.add('ef-panning');
+        try { frame.setPointerCapture(ev.pointerId); } catch (_) {}
+        ev.preventDefault();
+    }, {passive:false});
+
+    frame.addEventListener('pointermove', function(ev) {
+        const state = efViewportPanState;
+        if (!state || state.pointerId !== ev.pointerId) return;
+        const dx = ev.clientX - state.x;
+        const dy = ev.clientY - state.y;
+        if (Math.abs(dx) + Math.abs(dy) > 2) state.moved = true;
+
+        if (state.mode === 'transform' && wrapper) {
+            const tx = state.startX + dx;
+            const ty = state.startY + dy;
+            wrapper.style.transform = `translate(${tx}px, ${ty}px)`;
+            wrapper.dataset.panX = tx;
+            wrapper.dataset.panY = ty;
+        } else {
+            frame.scrollLeft = state.left - dx;
+            frame.scrollTop = state.top - dy;
+        }
+        ev.preventDefault();
+    }, {passive:false});
+
+    const endPan = function(ev) {
+        const state = efViewportPanState;
+        if (!state || (ev.pointerId != null && state.pointerId !== ev.pointerId)) return;
+        efViewportPanState = null;
+        frame.classList.remove('ef-panning');
+        try { frame.releasePointerCapture(state.pointerId); } catch (_) {}
+        if (state.moved) ev.preventDefault();
+    };
+    frame.addEventListener('pointerup', endPan, {passive:false});
+    frame.addEventListener('pointercancel', endPan, {passive:false});
+    frame.addEventListener('lostpointercapture', function() {
+        efViewportPanState = null;
+        frame.classList.remove('ef-panning');
+    });
+}
+
+function efBindTreeViewControls() {
+    const frame = document.querySelector('#ef-space-final .ef-tree-frame');
+    const wrapper = document.getElementById('tree-scroll-wrapper');
+    if (!frame || !wrapper) return;
+
+    efApplyTreeZoom(wrapper, frame, 1);
+    efBindTreeViewportPan(frame);
+
+    const fit = document.getElementById('ef-fit-tree');
+    if (fit && fit.dataset.v027Bound !== '1') {
+        fit.dataset.v027Bound = '1';
+        fit.textContent = 'CENTRALIZAR ÁREA';
+        fit.addEventListener('click', function(ev) {
+            ev.preventDefault();
+            efFitTreeViewport(wrapper, frame);
+        });
+    }
+
+    ['ef-zoom-out','ef-zoom-in'].forEach(id => {
+        const btn = document.getElementById(id);
+        if (!btn) return;
+        btn.disabled = true;
+        btn.setAttribute('aria-disabled', 'true');
+        btn.title = 'A Skill Tree usa sua escala normal 1:1; navegue pelo viewport para visualizar toda a área interna.';
+    });
+    const out = document.getElementById('ef-zoom-value');
+    if (out) out.textContent = '100% · ESCALA 1:1';
+}
